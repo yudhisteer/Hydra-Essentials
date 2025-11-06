@@ -1,0 +1,3 @@
+user:
+  name: ${oc.env:USER}
+  password: ${oc.env:PASSWORD, default_password}
