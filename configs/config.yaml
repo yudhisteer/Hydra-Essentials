@@ -1,0 +1,7 @@
+defaults:
+  - experiment: experiment_with_resnet18
+  - demo_config
+  - _self_
+
+experiment:
+  optimizer: SGD

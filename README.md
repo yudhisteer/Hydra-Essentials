@@ -474,10 +474,10 @@ if __name__ == "__main__":
     main()
 ```
 
-Now we can run out file using `+experiments=experiment_with_resnet18` and this will overwrite our empty config.yaml file in he outputs/ dir. 
+Now we can run out file using `+experiment=experiment_with_resnet18` and this will overwrite our empty config.yaml file in he outputs/ dir. 
 
 ```bash
-╰─$ python scripts/03_grouping.py +experiments=experiment_with_resnet18
+╰─$ python scripts/03_grouping.py +experiment=experiment_with_resnet18
 experiments:
   model: resnet18
   epochs: 100
@@ -485,4 +485,104 @@ experiments:
   lr: 0.001
   optimizer: adam
   scheduler: cosine
+```
+
+Before our `config.yaml` file was empty but we can configure it to have a **default** experiment. like this:
+
+```yaml
+#configs/config.yaml
+defaults:
+  - experiment: experiment_with_resnet18
+```
+
+Now we can run our file without specifying the experiment.
+
+```bash
+╰─$ python scripts/03_grouping.py
+experiments:
+  model: resnet18
+  epochs: 100
+  batch_size: 128
+  lr: 0.001
+  optimizer: adam
+  scheduler: cosine
+```
+
+We can also load other experiments using:
+
+```yaml
+#configs/config.yaml
+defaults:
+  - experiment: experiment_with_resnet18
+  - override experiment: experiment_with_resnet50 # This will override the default experiment
+```
+
+This will print:
+
+```bash
+╰─$ python scripts/03_grouping.py
+experiment:
+  model: resnet50
+  epochs: 100
+  batch_size: 128
+  lr: 0.001
+  optimizer: adam
+  scheduler: cosine
+```
+
+We can also override the default experiment using:
+
+```yaml
+#configs/config.yaml
+defaults:
+  - experiment: experiment_with_resnet18
+  - override experiment: experiment_with_resnet50
+  - _self_
+
+experiment:
+  optimizer: SGD
+```
+
+We use `- _self_` to override the default experiment.
+
+```bash
+╰─$ python scripts/03_grouping.py
+experiment:
+  model: resnet50
+  epochs: 100
+  batch_size: 128
+  lr: 0.001
+  optimizer: SGD <---- This is the overridden optimizer
+  scheduler: cosine
+```
+
+We can also merge another config file into the main config file. We creete a new confg file named `demo_config.yaml` as shown below:
+
+```yaml
+#configs/demo_config.yaml
+seed: 42
+```
+We then specify the name of the config file to merge in the `config.yaml` file.
+
+```yaml
+#configs/config.yaml
+defaults:
+  - experiment: experiment_with_resnet18
+  - demo_config <---- another config file name to merge
+  - _self_
+
+experiment:
+  optimizer: SGD
+```
+
+```bash
+╰─$ python scripts/03_grouping.py                                                                                                                                                  1 ↵
+experiment:
+  model: resnet18
+  epochs: 100
+  batch_size: 128
+  lr: 0.001
+  optimizer: SGD
+  scheduler: cosine
+seed: 42
 ```
