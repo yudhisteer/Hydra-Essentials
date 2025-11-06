@@ -429,3 +429,60 @@ training:
 model:
   name: resnet18
 ```
+
+## 3. Grouping
+
+We can also group configs into a single config file. We start by creatng two config file as shown below:
+
+```yaml
+#configs/experiments/experiment_with_resnet18.yaml
+model: resnet18
+epochs: 100
+batch_size: 128
+lr: 0.001
+optimizer: adam
+scheduler: cosine
+```
+
+```yaml
+#configs/experiments/experiment_with_resnet50.yaml
+model: resnet50
+epochs: 100
+batch_size: 128
+lr: 0.001
+optimizer: adam
+scheduler: cosine
+```
+
+In our code we need to specfy the empty config file ouside the experiments/ dir.
+
+```python
+#scripts/03_grouping.py
+from omegaconf import OmegaConf, DictConfig
+import hydra
+from rich import print
+import warnings
+warnings.filterwarnings("ignore")
+
+
+@hydra.main(config_path="../configs", config_name="config")
+def main(config: DictConfig) -> None:
+    print(OmegaConf.to_yaml(config))
+
+
+if __name__ == "__main__":
+    main()
+```
+
+Now we can run out file using `+experiments=experiment_with_resnet18` and this will overwrite our empty config.yaml file in he outputs/ dir. 
+
+```bash
+╰─$ python scripts/03_grouping.py +experiments=experiment_with_resnet18
+experiments:
+  model: resnet18
+  epochs: 100
+  batch_size: 128
+  lr: 0.001
+  optimizer: adam
+  scheduler: cosine
+```
