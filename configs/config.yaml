@@ -3,6 +3,11 @@ defaults:
   - loss_function: arcface
   - demo_config
   - _self_
+  - override hydra/job_logging: default #choose between none, disabled, default or stdout
+
 
 experiment:
   optimizer: SGD
+
+hydra:
+  verbose: True

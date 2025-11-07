@@ -747,3 +747,99 @@ loss_function:
   margin: 0.5
 seed: 42
 ```
+
+
+## Logging and Debugging
+
+We can specify we want to loging or not tin the config file. If we choose "default" or "stdout", it will create a log file in the outputs/ dir.
+
+```yaml
+#configs/config.yaml
+defaults:
+  - experiment: experiment_with_resnet18
+  - loss_function: arcface
+  - demo_config
+  - _self_
+  - override hydra/job_logging: none #choose between none, disabled, default or stdout
+
+
+experiment:
+  optimizer: SGD
+
+hydra:
+  verbose: True
+```
+
+This is the file we creae in the outputs/ dir.
+
+```bash
+#outputs/{timestamp}/{timestamp}script.log
+[2025-11-06 17:28:23,017][__main__][INFO] - INFO: Printing config...
+[2025-11-06 17:28:23,017][__main__][DEBUG] - DEBUG: Printing optimizer...
+```
+
+But if we choose "none", it will not create a log file but still print the logs to the console until verbose is set to True.
+
+```python
+#scripts/03_grouping.py
+import logging
+import warnings
+
+from omegaconf import OmegaConf, DictConfig
+import hydra
+from rich import print
+warnings.filterwarnings("ignore")
+
+logger = logging.getLogger(__name__)
+
+
+@hydra.main(config_path="../configs", config_name="config")
+def main(config: DictConfig) -> None:
+    logger.info("INFO: Printing config...")
+    logger.debug("DEBUG: Printing optimizer...")
+
+
+if __name__ == "__main__":
+    main()
+```
+
+And this is the output in the console.
+
+```bash
+...
+loss_function:
+  name: arcface
+  margin: 0.8
+seed: 42
+
+[2025-11-06 17:26:27,835][HYDRA] INFO: Printing config...
+[2025-11-06 17:26:27,835][HYDRA] DEBUG: Printing optimizer...
+```
+
+In order to debug our config file, we can use the `--cfg job` flag. This will print the config file. Note that we are not using the print function in the script. Our `main` function could have a `pass` statement and it will still print the config file.
+
+```bash
+╰─$ python '/home/yoyo/Hydra-Essentials/scripts/03_grouping.py' --cfg job
+experiment:
+  model: resnet18
+  epochs: 100
+  batch_size: 128
+  lr: 0.001
+  optimizer: SGD
+  scheduler: cosine
+loss_function:
+  name: arcface
+  margin: 0
+```
+
+We can also only specify the package we want to debug usng the `--package` flag. This is helful when we have a lot of packages and we only want to debug one of them.
+
+```bash
+╰─$ python '/home/yoyo/Hydra-Essentials/scripts/03_grouping.py' --cfg job --package experiment
+# @package experiment
+model: resnet18
+epochs: 100
+batch_size: 128
+lr: 0.001
+optimizer: SGD
+```
