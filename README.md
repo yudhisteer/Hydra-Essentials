@@ -749,7 +749,7 @@ seed: 42
 ```
 
 
-## Logging and Debugging
+## 5. Logging and Debugging
 
 We can specify we want to loging or not tin the config file. If we choose "default" or "stdout", it will create a log file in the outputs/ dir.
 
@@ -842,4 +842,140 @@ epochs: 100
 batch_size: 128
 lr: 0.001
 optimizer: SGD
+```
+
+## 6. Instantiate
+
+We can instantiate a class using hydra. This is useful when we want to instantiate a class with a config file. We use the `_target_` key to specify the class to instantiate and the `name` key to pass the name to the class.
+We can also use the `hydra.utils.instantiate` function to instantiate the class.
+
+```yaml
+#scripts/instantiate_config.yaml
+my_class:
+  # we are specifying the class to instantiate
+  _target_: scripts.instantiate.MyClass
+  # we are passing the name to the class
+  name: Paul
+```
+
+```python
+#scripts/instantiate.py
+import hydra
+from omegaconf import DictConfig
+from hydra.utils import instantiate
+
+
+class MyClass:
+    def __init__(self, name: str):
+        self.name = name
+
+    def say_hello(self):
+        print(f"Hello, {self.name}!")
+
+
+@hydra.main(config_path=".", config_name="instantiate_config", version_base=None)
+def main(config: DictConfig):
+    my_class = MyClass(name="John")
+    my_class.say_hello()
+
+    # instantiate the class using hydra
+    my_class = instantiate(config.my_class)
+    my_class.say_hello()
+
+
+if __name__ == "__main__":
+    main()
+```
+
+Running the script as a module wih  `-m` flag will print:  
+
+```bash
+╰─$ python -m scripts.instantiate
+Hello, John!
+Hello, Paul!
+```
+
+Now what if we want to instantiate a class which depends on other classes? We can use the `_partial_` key to tell hydra that this is a partial config and it will not raise an error if the config is not complete.
+
+```yaml
+#scripts/instantiate_config.yaml
+optimizer:
+  # we are specifying the class to instantiate
+  _target_: torch.optim.Adam
+  # we are telling hydra that this is a partial config
+  # so it will not raise an error if the config is not complete
+  _partial_: true
+  # we are passing the learning rate to the class
+  lr: 0.01
+  betas: [0.1, 0.9]
+  eps: 1e-6
+```
+
+We create the partial optimizer by passing the parameters to the optimizer class. Note we could have not passed the parameters to the optimizer class and it would have been instantiated with the default parameters.
+
+```python
+#scripts/instantiate.py
+import hydra
+from omegaconf import DictConfig
+from hydra.utils import instantiate
+import torch
+import warnings
+warnings.filterwarnings("ignore")
+
+from rich import print
+
+class MyClass:
+    def __init__(self, name: str):
+        self.name = name
+
+    def say_hello(self):
+        print(f"Hello, {self.name}!")
+
+
+@hydra.main(config_path=".", config_name="instantiate_config", version_base=None)
+def main(config: DictConfig):
+    my_class = MyClass(name="John")
+    my_class.say_hello()
+
+    # instantiate the class using hydra
+    my_class = instantiate(config.my_class)
+    my_class.say_hello()
+
+    # instantiate the optimizer using hydra
+    print("Instantiating optimizer...")
+    parameters = torch.nn.Parameter(torch.randn(10))
+    print("Parameters:", parameters)
+    partial_optimizer = instantiate(config.optimizer)
+    print("Partial optimizer:", partial_optimizer)
+    optimizer = partial_optimizer([parameters])
+    print(optimizer)
+
+
+if __name__ == "__main__":
+    main()
+```
+
+Running the script will print:
+
+```bash
+╰─$ python -m scripts.instantiate
+Instantiating optimizer...
+Parameters: Parameter containing:
+tensor([-0.6364,  1.1314,  0.6071,  0.0829,  0.6568,  0.7903, -0.5078,  1.7053,
+        -0.0383,  1.4658], requires_grad=True)
+Partial optimizer: functools.partial(<class 'torch.optim.adam.Adam'>, lr=0.01, betas=[0.1, 0.9], eps=1e-06)
+Adam (
+Parameter Group 0
+    amsgrad: False
+    betas: [0.1, 0.9]
+    capturable: False
+    decoupled_weight_decay: False
+    differentiable: False
+    eps: 1e-06
+    foreach: None
+    fused: None
+    lr: 0.01
+    maximize: False
+    weight_decay: 0
+)
 ```

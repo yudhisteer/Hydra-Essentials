@@ -1,0 +1,16 @@
+my_class:
+  # we are specifying the class to instantiate
+  _target_: scripts.instantiate.MyClass
+  # we are passing the name to the class
+  name: Paul
+
+optimizer:
+  # we are specifying the class to instantiate
+  _target_: torch.optim.Adam
+  # we are telling hydra that this is a partial config
+  # so it will not raise an error if the config is not complete
+  _partial_: true
+  # we are passing the learning rate to the class
+  lr: 0.01
+  betas: [0.1, 0.9]
+  eps: 1e-6
