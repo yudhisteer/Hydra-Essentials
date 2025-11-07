@@ -586,3 +586,164 @@ experiment:
   scheduler: cosine
 seed: 42
 ```
+
+## 4. Multirun
+
+We can use the `-m` flag to run multiple experiments at once. We create new .yaml file in the `configs/loss_function` folder as shown below:
+
+```yaml
+#configs/loss_function/softmax.yaml
+name: softmax
+```
+
+```yaml
+#configs/loss_function/cosface.yaml
+name: cosface
+margin: 0.5
+```
+
+```yaml
+#configs/loss_function/arcface.yaml
+name: arcface
+margin: 0.8
+```
+
+Now we can run the experiments using the `-m` flag as shown below. Sicne we have 2 experiments and 3 loss functions, we will have 6 jobs in total.
+
+```bash
+╰─$ python scripts/03_grouping.py -m experiment=experiment_with_resnet18,experiment_with_resnet50 loss_function=arcface,cosface,softmax
+[2025-11-06 16:25:17,237][HYDRA] Launching 6 jobs locally
+[2025-11-06 16:25:17,237][HYDRA]        #0 : experiment=experiment_with_resnet18 loss_function=arcface
+experiment:
+  model: resnet18
+  epochs: 100
+  batch_size: 128
+  lr: 0.001
+  optimizer: SGD
+  scheduler: cosine
+loss_function:
+  name: arcface
+  margin: 0.8
+seed: 42
+
+[2025-11-06 16:25:17,448][HYDRA]        #1 : experiment=experiment_with_resnet18 loss_function=cosface
+experiment:
+  model: resnet18
+  epochs: 100
+  batch_size: 128
+  lr: 0.001
+  optimizer: SGD
+  scheduler: cosine
+loss_function:
+  name: cosface
+  margin: 0.5
+seed: 42
+
+[2025-11-06 16:25:17,561][HYDRA]        #2 : experiment=experiment_with_resnet18 loss_function=softmax
+experiment:
+  model: resnet18
+  epochs: 100
+  batch_size: 128
+  lr: 0.001
+  optimizer: SGD
+  scheduler: cosine
+loss_function:
+  name: softmax
+seed: 42
+
+[2025-11-06 16:25:17,680][HYDRA]        #3 : experiment=experiment_with_resnet50 loss_function=arcface
+experiment:
+  model: resnet50
+  epochs: 100
+  batch_size: 128
+  lr: 0.001
+  optimizer: SGD
+  scheduler: cosine
+loss_function:
+  name: arcface
+  margin: 0.8
+seed: 42
+
+[2025-11-06 16:25:17,830][HYDRA]        #4 : experiment=experiment_with_resnet50 loss_function=cosface
+experiment:
+  model: resnet50
+  epochs: 100
+  batch_size: 128
+  lr: 0.001
+  optimizer: SGD
+  scheduler: cosine
+loss_function:
+  name: cosface
+  margin: 0.5
+seed: 42
+
+[2025-11-06 16:25:17,939][HYDRA]        #5 : experiment=experiment_with_resnet50 loss_function=softmax
+experiment:
+  model: resnet50
+  epochs: 100
+  batch_size: 128
+  lr: 0.001
+  optimizer: SGD
+  scheduler: cosine
+loss_function:
+  name: softmax
+seed: 42
+```
+
+To simplify the CLI command, we can use the `glob` syntax. Notice that we use `exclude` to exclude the softmax loss function.
+
+```bash
+─$ python scripts/03_grouping.py -m experiment='glob(*)' loss_function='glob(*, exclude=soft*)'                                       
+[2025-11-06 16:28:37,613][HYDRA] Launching 4 jobs locally
+[2025-11-06 16:28:37,613][HYDRA]        #0 : experiment=experiment_with_resnet18 loss_function=arcface
+experiment:
+  model: resnet18
+  epochs: 100
+  batch_size: 128
+  lr: 0.001
+  optimizer: SGD
+  scheduler: cosine
+loss_function:
+  name: arcface
+  margin: 0.8
+seed: 42
+
+[2025-11-06 16:28:37,807][HYDRA]        #1 : experiment=experiment_with_resnet18 loss_function=cosface
+experiment:
+  model: resnet18
+  epochs: 100
+  batch_size: 128
+  lr: 0.001
+  optimizer: SGD
+  scheduler: cosine
+loss_function:
+  name: cosface
+  margin: 0.5
+seed: 42
+
+[2025-11-06 16:28:37,954][HYDRA]        #2 : experiment=experiment_with_resnet50 loss_function=arcface
+experiment:
+  model: resnet50
+  epochs: 100
+  batch_size: 128
+  lr: 0.001
+  optimizer: SGD
+  scheduler: cosine
+loss_function:
+  name: arcface
+  margin: 0.8
+seed: 42
+
+[2025-11-06 16:28:38,076][HYDRA]        #3 : experiment=experiment_with_resnet50 loss_function=cosface
+experiment:
+  model: resnet50
+  epochs: 100
+  batch_size: 128
+  lr: 0.001
+  optimizer: SGD
+  scheduler: cosine
+loss_function:
+  name: cosface
+  margin: 0.5
+seed: 42
+```
