@@ -1,0 +1,6 @@
+defaults:
+  - backbone: resnet18
+  - adapter: mnist_classification_resnet18
+  - head: identity_head
+
+constant: 9

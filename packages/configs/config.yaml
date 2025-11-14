@@ -1,0 +1,15 @@
+defaults:
+  - task: mnist_classification
+  - task/settings_a
+  - task/settings_b 
+  - _self_  
+
+# seed: 1000
+
+  # # - task@overriden_paqckage_name: mnist_classification
+  # - task@second_task: mnist_classification
+  # - task@third_task: mnist_classification
+
+  # - /task/model/simple_model@overriden_package_name
+  # we change task.model package to my_simple_model package
+  # - /task/model/simple_model@my_simple_model

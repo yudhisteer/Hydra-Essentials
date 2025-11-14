@@ -1,0 +1,5 @@
+# @package _global_
+
+seed: 99
+batch_size: 256
+epochs: 100

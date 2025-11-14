@@ -1,0 +1,5 @@
+# @package foo.bar
+
+# backbone key will disappear from task.model package
+# we changed it to foo.bar
+_target_: some_file.ResNet18

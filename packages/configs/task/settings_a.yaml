@@ -1,0 +1,5 @@
+# @package _global_
+
+seed: 42
+learning_rate: 0.001
+batch_size: 128

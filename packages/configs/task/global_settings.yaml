@@ -1,0 +1,6 @@
+# @package _global_
+
+# These fields will appear at the root level, not under task.global_settings
+seed: 42
+debug: true
+verbose: false
