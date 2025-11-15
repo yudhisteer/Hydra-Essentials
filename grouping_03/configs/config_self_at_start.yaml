@@ -1,0 +1,6 @@
+defaults:
+  - _self_
+  - experiment: experiment_with_resnet50
+
+experiment:
+  optimizer: SGD

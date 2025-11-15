@@ -1,0 +1,8 @@
+my_function:
+  _target_: instantiate_06.instantiate_args.my_function
+  # Positional arguments
+  _args_:
+    - "first positional arg"
+    - "second positional arg"
+  # Keyword arguments
+  keyword_arg: "keyword value"

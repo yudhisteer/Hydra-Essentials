@@ -1,0 +1,2 @@
+defaults:
+  - experiment: experiment_with_resnet18

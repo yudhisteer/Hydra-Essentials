@@ -1,6 +1,6 @@
 my_class:
   # we are specifying the class to instantiate
-  _target_: scripts.instantiate.MyClass
+  _target_: instantiate_06.instantiate.MyClass
   # we are passing the name to the class
   name: Paul
 

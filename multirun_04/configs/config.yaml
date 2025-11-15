@@ -1,0 +1,9 @@
+defaults:
+  - experiment: experiment_with_resnet18
+  - loss_function: arcface
+  - _self_
+
+experiment:
+  optimizer: SGD
+
+seed: 42

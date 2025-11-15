@@ -430,12 +430,28 @@ model:
   name: resnet18
 ```
 
-## 3. Grouping
+## 3. Config Groups
 
-We can also group configs into a single config file. We start by creatng two config file as shown below:
+Hydra's config groups allow you to organize related configurations into groups and easily switch between them. This is fundamental for managing different experiments, models, datasets, or any other configuration variants.
+
+**Why use config groups?**
+- **Organization**: Keep related configs together (e.g., all model configs in `configs/model/`)
+- **Reusability**: Define configs once, use them across multiple experiments
+- **Flexibility**: Switch between configurations easily via CLI or defaults
+- **Maintainability**: Easier to manage large projects with many configuration variants
+- **Composition**: Combine multiple config groups to create complete configurations
+
+**How it works:**
+Config groups are organized in subdirectories under your config path. The subdirectory name becomes the group name, and each YAML file in that directory is an option for that group.
+
+**All examples in this section are located in the `grouping_03/` directory.**
+
+### 3.1 Basic Config Groups
+
+We start by creating two experiment configuration files in the `experiment/` group:
 
 ```yaml
-#configs/experiments/experiment_with_resnet18.yaml
+#grouping_03/configs/experiment/experiment_with_resnet18.yaml
 model: resnet18
 epochs: 100
 batch_size: 128
@@ -445,7 +461,7 @@ scheduler: cosine
 ```
 
 ```yaml
-#configs/experiments/experiment_with_resnet50.yaml
+#grouping_03/configs/experiment/experiment_with_resnet50.yaml
 model: resnet50
 epochs: 100
 batch_size: 128
@@ -454,10 +470,21 @@ optimizer: adam
 scheduler: cosine
 ```
 
-In our code we need to specfy the empty config file ouside the experiments/ dir.
+**Understanding the Structure:**
+
+```
+grouping_03/
+└── configs/
+    ├── config.yaml           # Main config file
+    └── experiment/           # Config group named "experiment"
+        ├── experiment_with_resnet18.yaml  # Option 1
+        └── experiment_with_resnet50.yaml  # Option 2
+```
+
+The directory name `experiment/` creates a config group called `experiment`. Each YAML file inside is an option you can select.
 
 ```python
-#scripts/03_grouping.py
+#grouping_03/grouping.py
 from omegaconf import OmegaConf, DictConfig
 import hydra
 from rich import print
@@ -465,7 +492,7 @@ import warnings
 warnings.filterwarnings("ignore")
 
 
-@hydra.main(config_path="../configs", config_name="config")
+@hydra.main(config_path="configs", config_name="config", version_base=None)
 def main(config: DictConfig) -> None:
     print(OmegaConf.to_yaml(config))
 
@@ -474,11 +501,20 @@ if __name__ == "__main__":
     main()
 ```
 
-Now we can run out file using `+experiment=experiment_with_resnet18` and this will overwrite our empty config.yaml file in he outputs/ dir. 
+### 3.2 Adding Config Groups from CLI
+
+With an empty `config.yaml`, we can add config groups from the command line using the `+` prefix: 
+
+```yaml
+#grouping_03/configs/config.yaml
+# Empty config
+```
+
+Run it:
 
 ```bash
-╰─$ python scripts/03_grouping.py +experiment=experiment_with_resnet18
-experiments:
+python grouping_03/grouping.py +experiment=experiment_with_resnet18 hydra.job.chdir=False
+experiment:
   model: resnet18
   epochs: 100
   batch_size: 128
@@ -487,19 +523,31 @@ experiments:
   scheduler: cosine
 ```
 
-Before our `config.yaml` file was empty but we can configure it to have a **default** experiment. like this:
+**What's happening:**
+- The `+` prefix tells Hydra to **add** this config group to the composition
+- `experiment=experiment_with_resnet18` selects the `experiment_with_resnet18.yaml` file from the `experiment/` group
+- The content is placed under the `experiment` key in the final config
+
+**CLI Syntax:**
+- `+group=option` - Add a config group (errors if already in defaults)
+- `group=option` - Override a config group that's already in defaults
+- `~group` - Delete a config group from defaults
+
+### 3.3 Setting Default Config Groups
+
+Instead of specifying config groups every time from the CLI, we can set defaults in `config.yaml`:
 
 ```yaml
-#configs/config.yaml
+#grouping_03/configs/config_with_defaults.yaml
 defaults:
   - experiment: experiment_with_resnet18
 ```
 
-Now we can run our file without specifying the experiment.
+Now we can run without specifying the experiment:
 
 ```bash
-╰─$ python scripts/03_grouping.py
-experiments:
+python grouping_03/grouping.py --config-name=config_with_defaults hydra.job.chdir=False
+experiment:
   model: resnet18
   epochs: 100
   batch_size: 128
@@ -508,19 +556,26 @@ experiments:
   scheduler: cosine
 ```
 
-We can also load other experiments using:
+**Benefits of defaults:**
+- No need to specify config groups on every run
+- Clear documentation of what configs are being used
+- Can still override from CLI: `experiment=experiment_with_resnet50`
+
+### 3.4 Overriding Default Config Groups
+
+You can override default config groups in the defaults list:
 
 ```yaml
-#configs/config.yaml
+#grouping_03/configs/config_with_override.yaml
 defaults:
   - experiment: experiment_with_resnet18
-  - override experiment: experiment_with_resnet50 # This will override the default experiment
+  - override experiment: experiment_with_resnet50  # This overrides the previous default
 ```
 
-This will print:
+This will use ResNet50:
 
 ```bash
-╰─$ python scripts/03_grouping.py
+python grouping_03/grouping.py --config-name=config_with_override hydra.job.chdir=False
 experiment:
   model: resnet50
   epochs: 100
@@ -530,10 +585,17 @@ experiment:
   scheduler: cosine
 ```
 
-We can also override the default experiment using:
+**Why use `override`?**
+- Makes it explicit that you're overriding a previous default
+- Prevents accidental duplication errors
+- Better for readability in complex configs
+
+### 3.5 Using `_self_` to Control Merge Order
+
+The `_self_` keyword controls when the primary config's values are merged relative to defaults. This is crucial for understanding config composition:
 
 ```yaml
-#configs/config.yaml
+#grouping_03/configs/config_with_self.yaml
 defaults:
   - experiment: experiment_with_resnet18
   - override experiment: experiment_with_resnet50
@@ -543,40 +605,76 @@ experiment:
   optimizer: SGD
 ```
 
-We use `- _self_` to override the default experiment.
+The `_self_` determines when values from the primary config are applied:
 
 ```bash
-╰─$ python scripts/03_grouping.py
+python grouping_03/grouping.py --config-name=config_with_self hydra.job.chdir=False
 experiment:
   model: resnet50
   epochs: 100
   batch_size: 128
   lr: 0.001
-  optimizer: SGD <---- This is the overridden optimizer
+  optimizer: SGD      # ← This overrides the optimizer from the default
   scheduler: cosine
 ```
 
-We can also merge another config file into the main config file. We creete a new confg file named `demo_config.yaml` as shown below:
+**Understanding `_self_`:**
 
 ```yaml
-#configs/demo_config.yaml
+defaults:
+  - experiment: experiment_with_resnet50  # Sets optimizer: adam
+  - _self_                                 # Then apply primary config
+
+experiment:
+  optimizer: SGD  # This overrides adam because _self_ comes AFTER
+```
+
+**Order matters:**
+
+```yaml
+# _self_ at END (most common): Primary config overrides defaults
+defaults:
+  - experiment: experiment_with_resnet50
+  - _self_
+experiment:
+  optimizer: SGD  # This wins (SGD)
+
+# _self_ at START: Defaults override primary config
+defaults:
+  - _self_
+  - experiment: experiment_with_resnet50
+experiment:
+  optimizer: SGD  # This gets overridden (result: adam)
+```
+
+**Best practice:** Place `_self_` at the end so your explicit config values take precedence.
+
+### 3.6 Composing Multiple Config Groups
+
+You can combine multiple config groups to build your complete configuration:
+
+```yaml
+#grouping_03/configs/demo_config.yaml
 seed: 42
 ```
-We then specify the name of the config file to merge in the `config.yaml` file.
+
+You can include standalone config files (not in a group directory) directly in the defaults list:
 
 ```yaml
-#configs/config.yaml
+#grouping_03/configs/config_with_merge.yaml
 defaults:
   - experiment: experiment_with_resnet18
-  - demo_config <---- another config file name to merge
+  - demo_config     # ← Standalone config file
   - _self_
 
 experiment:
   optimizer: SGD
 ```
 
+Running this will merge all configs:
+
 ```bash
-╰─$ python scripts/03_grouping.py                                                                                                                                                  1 ↵
+python grouping_03/grouping.py --config-name=config_with_merge hydra.job.chdir=False
 experiment:
   model: resnet18
   epochs: 100
@@ -584,34 +682,443 @@ experiment:
   lr: 0.001
   optimizer: SGD
   scheduler: cosine
-seed: 42
+seed: 42              # ← Merged from demo_config.yaml
+```
+
+**Composition Flow:**
+1. Load `experiment/experiment_with_resnet18.yaml` → Sets experiment config
+2. Load `demo_config.yaml` → Adds seed
+3. Apply `_self_` → Overrides experiment.optimizer to SGD
+
+**Understanding Group vs Non-Group Configs:**
+
+```yaml
+defaults:
+  - experiment: experiment_with_resnet18  # Config GROUP: selects from experiment/ directory
+  - demo_config                            # Standalone config: loads demo_config.yaml directly
+```
+
+- **Config Group** (`experiment: option`): Subdirectory with multiple options
+  - Located in `configs/experiment/`
+  - Requires `group: option` syntax
+  - Content placed under `experiment` key by default
+
+- **Standalone Config** (`demo_config`): Single YAML file in root
+  - Located directly in `configs/`
+  - Just the filename (no group)
+  - Content merged at root level by default
+
+### 3.7 Advanced Config Group Features
+
+#### Optional Config Groups
+
+Use the `optional` keyword to prevent errors if a config doesn't exist:
+
+```yaml
+defaults:
+  - experiment: experiment_with_resnet18
+  - optional dataset: imagenet  # Won't error if imagenet.yaml doesn't exist
+  - optional custom_overrides   # Won't error if custom_overrides.yaml doesn't exist
+```
+
+**When to use:**
+- User-specific configs that might not exist in all environments
+- Optional plugins or extensions
+- Development overrides that don't exist in production
+
+**Example use case:**
+
+```yaml
+#configs/config.yaml
+defaults:
+  - model: resnet50
+  - dataset: imagenet
+  - optional local_overrides  # Developers can add local_overrides.yaml for personal settings
+  - _self_
+```
+
+Each developer can create their own `local_overrides.yaml` without affecting others.
+
+#### Nested Config Groups
+
+Config groups can be nested in subdirectories:
+
+```
+configs/
+└── model/
+    ├── vision/
+    │   ├── resnet18.yaml
+    │   ├── resnet50.yaml
+    │   └── vit.yaml
+    └── nlp/
+        ├── bert.yaml
+        └── gpt.yaml
+```
+
+Usage with `/` separator:
+
+```yaml
+defaults:
+  - model/vision: resnet50    # Loads configs/model/vision/resnet50.yaml
+  - model/nlp: bert           # Loads configs/model/nlp/bert.yaml
+```
+
+From CLI:
+
+```bash
+python app.py model/vision=vit model/nlp=gpt
+```
+
+**Benefits:**
+- Better organization for large projects
+- Logical grouping of related configs
+- Clearer config structure
+
+#### Config Search Path
+
+Hydra searches for configs in this order:
+
+1. **Current working directory** (if config_path is relative)
+2. **Specified config_path** in `@hydra.main()`
+3. **Additional search paths** (can be added programmatically)
+
+Example:
+
+```python
+@hydra.main(config_path="configs", config_name="config", version_base=None)
+def main(config: DictConfig):
+    pass
+```
+
+This looks for configs in `configs/` relative to where the script is run.
+
+### 3.8 Common Use Cases
+
+#### Organizing Experiments
+
+```
+configs/
+├── config.yaml
+├── model/
+│   ├── resnet18.yaml
+│   ├── resnet50.yaml
+│   └── vit.yaml
+├── dataset/
+│   ├── imagenet.yaml
+│   ├── cifar10.yaml
+│   └── mnist.yaml
+├── optimizer/
+│   ├── adam.yaml
+│   ├── sgd.yaml
+│   └── adamw.yaml
+└── experiment/
+    ├── baseline.yaml
+    ├── ablation_1.yaml
+    └── production.yaml
+```
+
+Then compose them:
+
+```yaml
+defaults:
+  - model: resnet50
+  - dataset: imagenet
+  - optimizer: adam
+  - experiment: baseline
+  - _self_
+```
+
+#### Environment-Specific Configs
+
+```
+configs/
+├── config.yaml
+└── env/
+    ├── local.yaml
+    ├── dev.yaml
+    └── production.yaml
+```
+
+Switch environments easily:
+
+```bash
+python app.py env=production
+```
+
+#### Modular Training Configurations
+
+```yaml
+#configs/config.yaml
+defaults:
+  - model: resnet50
+  - data: imagenet
+  - optimizer: adam
+  - scheduler: cosine
+  - augmentation: autoaugment
+  - loss: cross_entropy
+  - _self_
+
+# Global settings
+batch_size: 256
+num_workers: 8
+```
+
+### 3.9 Best Practices and Tips
+
+#### Best Practices
+
+**1. Use meaningful group names:**
+```
+✓ Good: configs/model/, configs/optimizer/, configs/dataset/
+✗ Bad: configs/m/, configs/opt/, configs/d/
+```
+
+**2. Keep configs focused:**
+Each config file should configure one logical component
+```yaml
+# Good: configs/model/resnet50.yaml
+name: resnet50
+layers: 50
+pretrained: true
+
+# Bad: mixing concerns
+name: resnet50
+layers: 50
+batch_size: 128  # This belongs in training config
+learning_rate: 0.001  # This belongs in optimizer config
+```
+
+**3. Use `_self_` at the end:**
+```yaml
+defaults:
+  - model: resnet50
+  - _self_  # Your overrides apply last
+
+# Your overrides
+model:
+  pretrained: false
+```
+
+**4. Document your defaults:**
+```yaml
+defaults:
+  - model: resnet50          # Base model architecture
+  - optimizer: adam          # Default optimizer
+  - dataset: imagenet        # Training dataset
+  - _self_
+```
+
+#### Common Pitfalls
+
+**Pitfall 1: Forgetting the `+` when adding new groups**
+
+```bash
+# Wrong - errors if experiment not in defaults
+python grouping_03/grouping.py experiment=experiment_with_resnet18
+
+# Right - adds the group
+python grouping_03/grouping.py +experiment=experiment_with_resnet18
+```
+
+**Pitfall 2: Not understanding `_self_` placement**
+
+```yaml
+# WRONG - _self_ at START means defaults override your values
+defaults:
+  - _self_                                # Apply primary config first
+  - experiment: experiment_with_resnet50  # Then apply defaults (overrides!)
+
+experiment:
+  optimizer: SGD  # Gets overridden by experiment's adam → Result: adam ✗
+
+# CORRECT - _self_ at END means your values win
+defaults:
+  - experiment: experiment_with_resnet50  # Apply defaults first
+  - _self_                                # Then apply primary config
+
+experiment:
+  optimizer: SGD  # This applies last → Result: SGD ✓
+```
+
+**Remember:** Items later in the defaults list override earlier items. `_self_` represents when the primary config is applied.
+
+**Pitfall 3: Circular dependencies**
+
+```yaml
+# configs/a.yaml
+defaults:
+  - b
+
+# configs/b.yaml
+defaults:
+  - a
+
+# This creates an infinite loop!
+```
+
+**Solution:** Design your config hierarchy carefully to avoid circular dependencies.
+
+### 3.10 Test Commands
+
+All examples in this section can be tested with the following commands. Run from the project root directory:
+
+**Note:** All commands include `hydra.job.chdir=False` to prevent Hydra from creating output directories.
+
+#### Adding config group from CLI
+```bash
+python grouping_03/grouping.py +experiment=experiment_with_resnet18 hydra.job.chdir=False
+```
+
+#### Using default config groups
+```bash
+python grouping_03/grouping.py --config-name=config_with_defaults hydra.job.chdir=False
+```
+
+#### Overriding defaults
+```bash
+python grouping_03/grouping.py --config-name=config_with_override hydra.job.chdir=False
+```
+
+#### Using _self_ for merge order
+```bash
+python grouping_03/grouping.py --config-name=config_with_self hydra.job.chdir=False
+```
+
+#### Composing multiple configs
+```bash
+python grouping_03/grouping.py --config-name=config_with_merge hydra.job.chdir=False
+```
+
+#### Switching configs from CLI
+```bash
+# Start with defaults, then switch experiment
+python grouping_03/grouping.py --config-name=config_with_defaults experiment=experiment_with_resnet50 hydra.job.chdir=False
+```
+
+### 3.11 Files in grouping_03/ Directory
+
+```
+grouping_03/
+├── configs/
+│   ├── config.yaml                      # Empty base config
+│   ├── config_with_defaults.yaml        # Config with default experiment
+│   ├── config_with_override.yaml        # Config with override keyword
+│   ├── config_with_self.yaml            # Config demonstrating _self_
+│   ├── config_with_merge.yaml           # Config merging multiple files
+│   ├── demo_config.yaml                 # Standalone config for merging
+│   └── experiment/
+│       ├── experiment_with_resnet18.yaml
+│       └── experiment_with_resnet50.yaml
+└── grouping.py                           # Main script
 ```
 
 ## 4. Multirun
 
-We can use the `-m` flag to run multiple experiments at once. We create new .yaml file in the `configs/loss_function` folder as shown below:
+Hydra's multirun feature allows you to run multiple experiments by sweeping over different configuration options using the `-m` flag. This is essential for hyperparameter tuning, model comparison, and ablation studies.
+
+**Why use multirun?**
+- **Hyperparameter sweeps**: Test multiple learning rates, batch sizes, or architectures automatically
+- **Model comparisons**: Compare different models or loss functions systematically
+- **Ablation studies**: Test the impact of different components
+- **Reproducibility**: All experiment variations are tracked and logged
+- **Automation**: Eliminate manual script modifications for each experiment
+
+**How it works:**
+Multirun creates a **cartesian product** of all parameter combinations. If you specify 2 experiments and 3 loss functions, you get 2 × 3 = 6 total jobs. Each job runs with a unique combination of parameters.
+
+**All examples in this section are located in the `multirun_04/` directory.**
+
+### 4.1 Basic Multirun Setup
+
+We create configuration files for different experiments and loss functions:
 
 ```yaml
-#configs/loss_function/softmax.yaml
+#multirun_04/configs/loss_function/softmax.yaml
 name: softmax
 ```
 
 ```yaml
-#configs/loss_function/cosface.yaml
+#multirun_04/configs/loss_function/cosface.yaml
 name: cosface
 margin: 0.5
 ```
 
 ```yaml
-#configs/loss_function/arcface.yaml
+#multirun_04/configs/loss_function/arcface.yaml
 name: arcface
 margin: 0.8
 ```
 
-Now we can run the experiments using the `-m` flag as shown below. Sicne we have 2 experiments and 3 loss functions, we will have 6 jobs in total.
+```yaml
+#multirun_04/configs/experiment/experiment_with_resnet18.yaml
+model: resnet18
+epochs: 100
+batch_size: 128
+lr: 0.001
+optimizer: adam
+scheduler: cosine
+```
+
+```yaml
+#multirun_04/configs/experiment/experiment_with_resnet50.yaml
+model: resnet50
+epochs: 100
+batch_size: 128
+lr: 0.001
+optimizer: adam
+scheduler: cosine
+```
+
+```yaml
+#multirun_04/configs/config.yaml
+defaults:
+  - experiment: experiment_with_resnet18
+  - loss_function: arcface
+  - _self_
+
+experiment:
+  optimizer: SGD
+
+seed: 42
+```
+
+```python
+#multirun_04/multirun.py
+from omegaconf import OmegaConf, DictConfig
+import hydra
+from rich import print
+import warnings
+warnings.filterwarnings("ignore")
+
+
+@hydra.main(config_path="configs", config_name="config", version_base=None)
+def main(config: DictConfig) -> None:
+    print(OmegaConf.to_yaml(config))
+
+
+if __name__ == "__main__":
+    main()
+```
+
+### 4.2 Running Multirun Experiments
+
+Now we can run the experiments using the `-m` flag. Since we have 2 experiments and 3 loss functions, we will have 6 jobs in total.
+
+**Understanding the Cartesian Product:**
+- `experiment=experiment_with_resnet18,experiment_with_resnet50` → 2 options
+- `loss_function=arcface,cosface,softmax` → 3 options
+- Total combinations: 2 × 3 = **6 jobs**
+
+Each job runs with a unique combination:
+1. resnet18 + arcface
+2. resnet18 + cosface
+3. resnet18 + softmax
+4. resnet50 + arcface
+5. resnet50 + cosface
+6. resnet50 + softmax
 
 ```bash
-╰─$ python scripts/03_grouping.py -m experiment=experiment_with_resnet18,experiment_with_resnet50 loss_function=arcface,cosface,softmax
+python multirun_04/multirun.py -m experiment=experiment_with_resnet18,experiment_with_resnet50 loss_function=arcface,cosface,softmax hydra.job.chdir=False
 [2025-11-06 16:25:17,237][HYDRA] Launching 6 jobs locally
 [2025-11-06 16:25:17,237][HYDRA]        #0 : experiment=experiment_with_resnet18 loss_function=arcface
 experiment:
@@ -690,10 +1197,50 @@ loss_function:
 seed: 42
 ```
 
-To simplify the CLI command, we can use the `glob` syntax. Notice that we use `exclude` to exclude the softmax loss function.
+**Multirun Output Structure:**
+
+When running multirun, Hydra creates a different directory structure than single runs:
+
+```
+multirun/
+└── YYYY-MM-DD/
+    └── HH-MM-SS/          # Timestamp of multirun launch
+        ├── 0/             # Job #0 output
+        │   └── .hydra/
+        ├── 1/             # Job #1 output
+        │   └── .hydra/
+        ├── ...
+        ├── 5/             # Job #5 output
+        │   └── .hydra/
+        └── multirun.yaml  # Overview of all jobs
+```
+
+Each job gets its own numbered directory, and the `multirun.yaml` file contains metadata about all runs.
+
+### 4.3 Using Glob Syntax
+
+To simplify the CLI command, we can use the `glob` syntax. This is especially useful when you have many config options or want pattern matching.
+
+**Basic Glob Examples:**
 
 ```bash
-─$ python scripts/03_grouping.py -m experiment='glob(*)' loss_function='glob(*, exclude=soft*)'                                       
+# Match all experiments
+experiment='glob(*)'
+
+# Match specific patterns
+experiment='glob(resnet*)'        # Matches resnet18, resnet50, etc.
+loss_function='glob(*face)'       # Matches arcface, cosface
+
+# Exclude patterns
+loss_function='glob(*, exclude=soft*)'  # All except softmax
+```
+
+**Example: Excluding Softmax**
+
+Notice that we use `exclude` to exclude the softmax loss function:
+
+```bash
+python multirun_04/multirun.py -m experiment='glob(*)' loss_function='glob(*, exclude=soft*)' hydra.job.chdir=False                                       
 [2025-11-06 16:28:37,613][HYDRA] Launching 4 jobs locally
 [2025-11-06 16:28:37,613][HYDRA]        #0 : experiment=experiment_with_resnet18 loss_function=arcface
 experiment:
@@ -748,118 +1295,1253 @@ loss_function:
 seed: 42
 ```
 
+### 4.4 Advanced Sweep Syntax
+
+#### Range Syntax
+
+Hydra supports numerical ranges for sweeping over numeric hyperparameters:
+
+```bash
+# Sweep over learning rates
+python multirun_04/multirun.py -m experiment.lr=0.001,0.0001,0.00001
+
+# Using range() for batch sizes: range(start, stop, step)
+python multirun_04/multirun.py -m experiment.batch_size=range(32,256,32)
+# Generates: 32, 64, 96, 128, 160, 192, 224
+
+# Combine with other parameters
+python multirun_04/multirun.py -m experiment.lr=0.001,0.0001 experiment.batch_size=32,64,128
+# Creates 2 × 3 = 6 jobs
+```
+
+#### Multiple Parameter Sweeps
+
+You can sweep over any number of parameters:
+
+```bash
+# 3-dimensional sweep: 2 × 3 × 2 = 12 jobs
+python multirun_04/multirun.py -m \
+  experiment=experiment_with_resnet18,experiment_with_resnet50 \
+  loss_function=arcface,cosface,softmax \
+  experiment.lr=0.001,0.0001 \
+  hydra.job.chdir=False
+```
+
+### 4.5 Common Use Cases
+
+#### Hyperparameter Tuning
+
+```bash
+# Sweep over learning rate and weight decay
+python multirun_04/multirun.py -m \
+  experiment.lr=0.1,0.01,0.001,0.0001 \
+  experiment.weight_decay=0.0,0.0001,0.001 \
+  hydra.job.chdir=False
+```
+
+#### Model Architecture Comparison
+
+```bash
+# Compare different model architectures
+python multirun_04/multirun.py -m \
+  experiment='glob(*)' \
+  hydra.job.chdir=False
+```
+
+#### Ablation Studies
+
+Test the impact of different components:
+
+```bash
+# Test with/without different components
+python multirun_04/multirun.py -m \
+  loss_function='glob(*)' \
+  experiment.dropout=0.0,0.1,0.2,0.3 \
+  hydra.job.chdir=False
+```
+
+### 4.6 Best Practices and Tips
+
+#### When to Use Multirun
+
+**✓ Good use cases:**
+- Hyperparameter sweeps (learning rate, batch size, etc.)
+- Comparing different models or architectures
+- Testing multiple random seeds for statistical significance
+- Ablation studies to understand component importance
+
+**✗ Avoid for:**
+- Single experiments (use regular run instead)
+- Very long-running jobs that would take too long in sequence
+- When you need interactive debugging
+
+#### Tips for Effective Multirun
+
+**1. Start small, then expand:**
+```bash
+# First test with 2-3 combinations
+python multirun_04/multirun.py -m experiment.lr=0.01,0.001
+
+# Then expand after confirming it works
+python multirun_04/multirun.py -m experiment.lr=0.1,0.01,0.001,0.0001
+```
+
+**2. Use glob for large sweeps:**
+```bash
+# Instead of listing all
+python multirun_04/multirun.py -m experiment='glob(*)'
+```
+
+**3. Organize experiments logically:**
+Create config groups for related experiments:
+```
+configs/
+├── experiment/
+│   ├── resnet_small/
+│   ├── resnet_medium/
+│   └── resnet_large/
+```
+
+**4. Track results systematically:**
+- Each multirun creates a timestamped directory
+- Use the job number to identify specific runs
+- The `multirun.yaml` file contains all job configurations
+
+#### Common Pitfalls
+
+**Problem: Too many combinations**
+```bash
+# This creates 4 × 4 × 3 × 5 = 240 jobs!
+python multirun_04/multirun.py -m \
+  experiment.lr=0.1,0.01,0.001,0.0001 \
+  experiment.batch_size=32,64,128,256 \
+  loss_function='glob(*)' \
+  experiment.dropout=0.0,0.1,0.2,0.3,0.4
+```
+
+**Solution:** Use sequential sweeps or reduce parameter space:
+```bash
+# First sweep over learning rate
+python multirun_04/multirun.py -m experiment.lr=0.1,0.01,0.001,0.0001
+
+# Then sweep over batch size with best LR
+python multirun_04/multirun.py -m experiment.lr=0.001 experiment.batch_size=32,64,128,256
+```
+
+### 4.7 Test Commands
+
+All examples in this section can be tested with the following commands. Run from the project root directory:
+
+**Note:** All commands include `hydra.job.chdir=False` to prevent Hydra from creating output directories and changing the working directory.
+
+#### Basic Multirun (6 jobs)
+```bash
+python multirun_04/multirun.py -m experiment=experiment_with_resnet18,experiment_with_resnet50 loss_function=arcface,cosface,softmax hydra.job.chdir=False
+```
+
+#### Using Glob Syntax (4 jobs - excludes softmax)
+```bash
+python multirun_04/multirun.py -m experiment='glob(*)' loss_function='glob(*, exclude=soft*)' hydra.job.chdir=False
+```
+
+#### Single Run (no multirun)
+```bash
+python multirun_04/multirun.py hydra.job.chdir=False
+```
+
+#### Range Sweep Example
+```bash
+# Sweep over learning rates using direct values
+python multirun_04/multirun.py -m experiment.lr=0.1,0.01,0.001 hydra.job.chdir=False
+```
+
+### 4.8 Advanced Features
+
+**Parallel Execution:**
+
+By default, multirun jobs execute **sequentially** (one after another). For parallel execution, you can use Hydra launcher plugins:
+
+- **Joblib Launcher**: Local parallel execution
+- **SLURM Launcher**: For HPC clusters
+- **Ray Launcher**: Distributed execution
+- **AWS Batch Launcher**: Cloud execution
+
+Example with Joblib (requires `hydra-joblib-launcher` plugin):
+```bash
+python multirun_04/multirun.py -m experiment='glob(*)' \
+  hydra/launcher=joblib \
+  hydra.launcher.n_jobs=4
+```
+
+**Note:** For the examples in this tutorial, we use sequential execution for simplicity.
+
+### 4.9 Files in multirun_04/ Directory
+
+```
+multirun_04/
+├── configs/
+│   ├── config.yaml                        # Main config with defaults
+│   ├── experiment/
+│   │   ├── experiment_with_resnet18.yaml  # ResNet18 experiment config
+│   │   └── experiment_with_resnet50.yaml  # ResNet50 experiment config
+│   └── loss_function/
+│       ├── arcface.yaml                   # ArcFace loss config
+│       ├── cosface.yaml                   # CosFace loss config
+│       └── softmax.yaml                   # Softmax loss config
+└── multirun.py                            # Main script for multirun examples
+```
 
 ## 5. Logging and Debugging
 
-We can specify we want to loging or not tin the config file. If we choose "default" or "stdout", it will create a log file in the outputs/ dir.
+Hydra provides comprehensive logging and debugging tools to help you understand your configuration composition, track experiment outputs, and troubleshoot issues.
 
-```yaml
-#configs/config.yaml
-defaults:
-  - experiment: experiment_with_resnet18
-  - loss_function: arcface
-  - demo_config
-  - _self_
-  - override hydra/job_logging: none #choose between none, disabled, default or stdout
+**Why use Hydra's logging and debugging?**
+- **Config inspection**: View final merged configs before running your code
+- **Composition debugging**: See exactly how configs are merged and where values come from
+- **Experiment tracking**: Automatic logging of all runs with timestamps and saved configs
+- **Troubleshooting**: Identify config conflicts, override issues, and composition problems
+- **Reproducibility**: Every run is logged with its exact configuration and overrides
 
+**How it works:**
+Hydra automatically creates output directories for each run, saves your configuration, logs your application output, and provides CLI flags to inspect configs without running your code. This makes it easy to understand what's happening and reproduce results later.
 
-experiment:
-  optimizer: SGD
+**All examples in this section are located in the `logging_05/` directory.**
 
-hydra:
-  verbose: True
-```
+### 5.1 Output Directory Structure
 
-This is the file we creae in the outputs/ dir.
+When you run a Hydra application, it automatically creates an organized directory structure to store outputs from each run.
+
+#### Single Run Directory Structure
+
+By default, each run creates a timestamped directory:
 
 ```bash
-#outputs/{timestamp}/{timestamp}script.log
-[2025-11-06 17:28:23,017][__main__][INFO] - INFO: Printing config...
-[2025-11-06 17:28:23,017][__main__][DEBUG] - DEBUG: Printing optimizer...
+outputs/
+└── YYYY-MM-DD/           # Date of run
+    └── HH-MM-SS/         # Time of run
+        ├── .hydra/       # Hydra metadata (hidden directory)
+        │   ├── config.yaml      # Final merged configuration
+        │   ├── hydra.yaml       # Hydra's own configuration
+        │   └── overrides.yaml   # List of CLI overrides used
+        └── your_script.log      # Application logs (if logging enabled)
 ```
 
-But if we choose "none", it will not create a log file but still print the logs to the console until verbose is set to True.
+**Example:** Running the demo creates this structure:
+
+```bash
+python logging_05/logging_demo.py
+```
+
+This creates:
+```bash
+outputs/2025-11-14/21-08-57/
+├── .hydra/
+│   ├── config.yaml
+│   ├── hydra.yaml
+│   └── overrides.yaml
+└── logging_demo.log
+```
+
+#### Multirun Directory Structure
+
+When using multirun (`-m` flag), Hydra creates a different structure:
+
+```bash
+multirun/
+└── YYYY-MM-DD/
+    └── HH-MM-SS/         # Timestamp of multirun launch
+        ├── 0/            # Job #0 output
+        │   ├── .hydra/
+        │   └── *.log
+        ├── 1/            # Job #1 output
+        │   ├── .hydra/
+        │   └── *.log
+        ├── 2/            # Job #2 output
+        │   ├── .hydra/
+        │   └── *.log
+        └── multirun.yaml # Overview of all jobs
+```
+
+**Example:**
+```bash
+python logging_05/logging_demo.py -m training.batch_size=32,64,128
+[2025-11-14 21:10:50,255][HYDRA] Launching 3 jobs locally
+[2025-11-14 21:10:50,255][HYDRA] 	#0 : training.batch_size=32
+[2025-11-14 21:10:50,437][HYDRA] 	#1 : training.batch_size=64
+[2025-11-14 21:10:50,586][HYDRA] 	#2 : training.batch_size=128
+```
+
+Each job gets its own numbered directory with complete configuration and logs.
+
+#### The .hydra Directory
+
+The `.hydra/` directory contains three important files:
+
+**1. config.yaml** - Your final merged configuration:
+```bash
+cat outputs/2025-11-14/21-08-57/.hydra/config.yaml
+```
+```yaml
+training:
+  batch_size: 128
+  epochs: 30
+  lr: 0.001
+  optimizer: adam
+model:
+  name: resnet18
+  pretrained: true
+seed: 42
+```
+
+**2. overrides.yaml** - List of CLI overrides used:
+```bash
+# Run with overrides
+python logging_05/logging_demo.py training.batch_size=256 model.name=resnet50
+
+# Check the overrides file
+cat outputs/2025-11-14/21-10-14/.hydra/overrides.yaml
+```
+```yaml
+- training.batch_size=256
+- model.name=resnet50
+```
+
+If no overrides were used, this file contains an empty list: `[]`
+
+**3. hydra.yaml** - Hydra's internal configuration (output paths, logging settings, launcher config, etc.)
+
+#### Controlling Output Directory Behavior
+
+You can control where outputs are saved and whether Hydra changes the working directory:
+
+```bash
+# Prevent Hydra from changing working directory
+python logging_05/logging_demo.py hydra.job.chdir=False
+
+# Change output directory location
+python logging_05/logging_demo.py hydra.run.dir=./my_outputs/${now:%Y-%m-%d}/${now:%H-%M-%S}
+
+# Disable output directory creation entirely
+python logging_05/logging_demo.py hydra.output_subdir=null hydra.run.dir=.
+```
+
+**When to use `hydra.job.chdir=False`:**
+- When you need to access files relative to where you launched the script
+- During development/debugging to keep outputs in one predictable location
+- When integrating with tools that expect a specific working directory
+
+### 5.2 Job Logging Configuration
+
+Hydra provides flexible logging configuration through the `hydra/job_logging` config group.
+
+#### Available Logging Options
+
+You can choose from these logging modes:
+
+- **`default`** - Logs to both console and file, standard formatting
+- **`stdout`** - Logs to console only (stdout), no file created
+- **`none`** - Minimal logging, console output only, no file
+- **`disabled`** - Disables Hydra's logging configuration entirely (use your own)
+
+#### Configuring Logging in Config Files
+
+**Example 1: Enable logging with verbose mode**
+
+```yaml
+#logging_05/configs/config_with_logging.yaml
+defaults:
+  - _self_
+  - override hydra/job_logging: default
+
+training:
+  batch_size: 128
+  epochs: 30
+  lr: 0.001
+  optimizer: adam
+
+model:
+  name: resnet18
+  pretrained: true
+
+seed: 42
+
+hydra:
+  verbose: true  # Show detailed Hydra information
+```
+
+**Example 2: Disable file logging**
+
+```yaml
+#logging_05/configs/config_no_logging.yaml
+defaults:
+  - _self_
+  - override hydra/job_logging: none
+
+# ... rest of config
+
+hydra:
+  verbose: true  # Logs still appear in console, but no file is created
+```
+
+#### Python Logger Integration
+
+Hydra automatically configures Python's logging module. You can use the standard `logging` module in your code:
 
 ```python
-#scripts/03_grouping.py
+#logging_05/logging_demo.py
 import logging
-import warnings
-
-from omegaconf import OmegaConf, DictConfig
+from omegaconf import DictConfig
 import hydra
-from rich import print
-warnings.filterwarnings("ignore")
 
 logger = logging.getLogger(__name__)
 
 
-@hydra.main(config_path="../configs", config_name="config")
+@hydra.main(config_path="configs", config_name="config", version_base=None)
 def main(config: DictConfig) -> None:
-    logger.info("INFO: Printing config...")
-    logger.debug("DEBUG: Printing optimizer...")
+    logger.info("INFO: Starting training...")
+    logger.debug("DEBUG: Printing config...")
+    logger.warning("WARNING: This is a warning message")
 
-
-if __name__ == "__main__":
-    main()
+    logger.info(f"INFO: Training with batch_size={config.training.batch_size}")
+    logger.info(f"INFO: Model: {config.model.name}")
+    logger.info("INFO: Training completed!")
 ```
 
-And this is the output in the console.
+Running with logging enabled:
 
 ```bash
-...
-loss_function:
-  name: arcface
-  margin: 0.8
-seed: 42
-
-[2025-11-06 17:26:27,835][HYDRA] INFO: Printing config...
-[2025-11-06 17:26:27,835][HYDRA] DEBUG: Printing optimizer...
+python logging_05/logging_demo.py --config-name=config_with_logging
+[2025-11-14 21:08:57,482][__main__][INFO] - INFO: Starting training...
+[2025-11-14 21:08:57,483][__main__][DEBUG] - DEBUG: Printing config...
+[2025-11-14 21:08:57,483][__main__][WARNING] - WARNING: This is a warning message
+[2025-11-14 21:08:57,548][__main__][INFO] - INFO: Training with batch_size=128
+[2025-11-14 21:08:57,549][__main__][INFO] - INFO: Model: resnet18
+[2025-11-14 21:08:57,549][__main__][INFO] - INFO: Training completed!
 ```
 
-In order to debug our config file, we can use the `--cfg job` flag. This will print the config file. Note that we are not using the print function in the script. Our `main` function could have a `pass` statement and it will still print the config file.
+#### Log File Contents
+
+The log file contains all logged messages:
 
 ```bash
-╰─$ python '/home/yoyo/Hydra-Essentials/scripts/03_grouping.py' --cfg job
-experiment:
-  model: resnet18
-  epochs: 100
+cat outputs/2025-11-14/21-08-57/logging_demo.log
+```
+```
+[2025-11-14 21:08:57,482][__main__][INFO] - INFO: Starting training...
+[2025-11-14 21:08:57,483][__main__][DEBUG] - DEBUG: Printing config...
+[2025-11-14 21:08:57,483][__main__][WARNING] - WARNING: This is a warning message
+[2025-11-14 21:08:57,548][__main__][INFO] - INFO: Training with batch_size=128
+[2025-11-14 21:08:57,549][__main__][INFO] - INFO: Model: resnet18
+[2025-11-14 21:08:57,549][__main__][INFO] - INFO: Training completed!
+```
+
+**Note:** By default, the log level is `INFO`. `DEBUG` messages appear because we set `hydra.verbose: true`. Without verbose mode, `DEBUG` messages are filtered out.
+
+#### Logging with No File Output
+
+When using `job_logging: none`, logs still appear in console (if verbose is true) but no log file is created:
+
+```bash
+python logging_05/logging_demo.py --config-name=config_no_logging hydra.job.chdir=False
+[2025-11-14 21:10:42,614][HYDRA] INFO: Starting training...
+[2025-11-14 21:10:42,614][HYDRA] DEBUG: Printing config...
+[2025-11-14 21:10:42,614][HYDRA] WARNING: This is a warning message
+[2025-11-14 21:10:42,667][HYDRA] INFO: Training with batch_size=128
+[2025-11-14 21:10:42,668][HYDRA] INFO: Model: resnet18
+[2025-11-14 21:10:42,668][HYDRA] INFO: Training completed!
+```
+
+Notice the `[HYDRA]` prefix in the logs when using `none` mode.
+
+### 5.3 Debugging Configs with --cfg
+
+The `--cfg` flag lets you view your configuration without running your application code. This is essential for debugging configuration issues.
+
+#### Available --cfg Options
+
+- `--cfg job` - View your application's configuration only
+- `--cfg hydra` - View Hydra's internal configuration
+- `--cfg all` - View both job and Hydra configuration
+
+#### Viewing Job Configuration
+
+The most common debugging task is viewing the final merged configuration:
+
+```bash
+python logging_05/logging_demo.py --cfg job
+```
+```yaml
+training:
   batch_size: 128
+  epochs: 30
   lr: 0.001
-  optimizer: SGD
-  scheduler: cosine
-loss_function:
-  name: arcface
-  margin: 0
+  optimizer: adam
+model:
+  name: resnet18
+  pretrained: true
+seed: 42
 ```
 
-We can also only specify the package we want to debug usng the `--package` flag. This is helful when we have a lot of packages and we only want to debug one of them.
+**When your application doesn't run, use `--cfg job` to see what configuration Hydra assembled.**
+
+#### Viewing Specific Packages with --package
+
+Use `--package` to view only a specific section of the config:
 
 ```bash
-╰─$ python '/home/yoyo/Hydra-Essentials/scripts/03_grouping.py' --cfg job --package experiment
-# @package experiment
-model: resnet18
-epochs: 100
+python logging_05/logging_demo.py --cfg job --package training
+```
+```yaml
+# @package training
 batch_size: 128
+epochs: 30
 lr: 0.001
-optimizer: SGD
+optimizer: adam
+```
+
+This is useful for large configs where you only want to see one component.
+
+**Example with model package:**
+```bash
+python logging_05/logging_demo.py --cfg job --package model
+```
+```yaml
+# @package model
+name: resnet18
+pretrained: true
+```
+
+#### Viewing Hydra's Configuration
+
+See how Hydra itself is configured:
+
+```bash
+python logging_05/logging_demo.py --cfg hydra | head -30
+```
+```yaml
+hydra:
+  run:
+    dir: outputs/${now:%Y-%m-%d}/${now:%H-%M-%S}
+  sweep:
+    dir: multirun/${now:%Y-%m-%d}/${now:%H-%M-%S}
+    subdir: ${hydra.job.num}
+  launcher:
+    _target_: hydra._internal.core_plugins.basic_launcher.BasicLauncher
+  sweeper:
+    _target_: hydra._internal.core_plugins.basic_sweeper.BasicSweeper
+    max_batch_size: null
+    params: null
+  hydra_logging:
+    version: 1
+    formatters:
+      simple:
+        format: '[%(asctime)s][HYDRA] %(message)s'
+    handlers:
+      console:
+        class: logging.StreamHandler
+        formatter: simple
+        stream: ext://sys.stdout
+    root:
+      level: INFO
+      handlers:
+      - console
+    loggers:
+      logging_example:
+        level: DEBUG
+    disable_existing_loggers: false
+```
+
+This shows:
+- Output directory patterns (`outputs/${now:%Y-%m-%d}/...`)
+- Launcher and sweeper configurations
+- Logging configuration
+- And much more
+
+#### Viewing All Configuration
+
+See both job and Hydra configs together:
+
+```bash
+python logging_05/logging_demo.py --cfg all | head -40
+```
+
+This outputs the complete configuration tree, starting with Hydra's config followed by your job config.
+
+### 5.4 Resolving Interpolations with --resolve
+
+Hydra supports variable interpolation in configs (e.g., `${model.name}`). Use `--resolve` to see the final resolved values.
+
+#### Config with Interpolations
+
+```yaml
+#logging_05/configs/config_with_interpolation.yaml
+training:
+  batch_size: 128
+  epochs: 30
+  lr: 0.001
+  optimizer: adam
+
+model:
+  name: resnet18
+  pretrained: true
+  input_size: 224
+
+# Interpolations
+experiment_name: ${model.name}_bs${training.batch_size}_lr${training.lr}
+checkpoint_path: ./checkpoints/${experiment_name}
+log_dir: ./logs/${experiment_name}
+
+seed: 42
+```
+
+#### Without --resolve (shows interpolation syntax)
+
+```bash
+python logging_05/logging_demo.py --config-name=config_with_interpolation --cfg job
+```
+```yaml
+training:
+  batch_size: 128
+  epochs: 30
+  lr: 0.001
+  optimizer: adam
+model:
+  name: resnet18
+  pretrained: true
+  input_size: 224
+experiment_name: ${model.name}_bs${training.batch_size}_lr${training.lr}
+checkpoint_path: ./checkpoints/${experiment_name}
+log_dir: ./logs/${experiment_name}
+seed: 42
+```
+
+#### With --resolve (shows final values)
+
+```bash
+python logging_05/logging_demo.py --config-name=config_with_interpolation --cfg job --resolve
+```
+```yaml
+training:
+  batch_size: 128
+  epochs: 30
+  lr: 0.001
+  optimizer: adam
+model:
+  name: resnet18
+  pretrained: true
+  input_size: 224
+experiment_name: resnet18_bs128_lr0.001
+checkpoint_path: ./checkpoints/resnet18_bs128_lr0.001
+log_dir: ./logs/resnet18_bs128_lr0.001
+seed: 42
+```
+
+**Notice:** All `${...}` interpolations are resolved to their actual values.
+
+**Use `--resolve` when:**
+- Debugging interpolation errors
+- Verifying that interpolated paths are correct
+- Understanding what values will actually be used at runtime
+
+### 5.5 Inspecting Config Composition with --info
+
+The `--info` flag provides detailed information about how your configuration is composed. This is invaluable for debugging complex config hierarchies.
+
+#### Available --info Options
+
+- `--info defaults` - Show list of all default configs and where they come from
+- `--info defaults-tree` - Show hierarchical tree of config composition
+- `--info searchpath` - Show where Hydra searches for config files
+- `--info config` - Show available config groups and options
+- `--info plugins` - Show installed Hydra plugins
+- `--info all` - Show all of the above
+
+#### Viewing Defaults List
+
+The defaults list shows every config file that's being loaded, in order:
+
+```bash
+python logging_05/logging_demo.py --config-name=config_with_defaults --info defaults
+```
+```
+Defaults List
+*************
+| Config path                 | Package             | _self_ | Parent               |
+--------------------------------------------------------------------------------------
+| hydra/output/default        | hydra               | False  | hydra/config         |
+| hydra/launcher/basic        | hydra.launcher      | False  | hydra/config         |
+| hydra/sweeper/basic         | hydra.sweeper       | False  | hydra/config         |
+| hydra/help/default          | hydra.help          | False  | hydra/config         |
+| hydra/hydra_help/default    | hydra.hydra_help    | False  | hydra/config         |
+| hydra/hydra_logging/default | hydra.hydra_logging | False  | hydra/config         |
+| hydra/job_logging/default   | hydra.job_logging   | False  | hydra/config         |
+| hydra/env/default           | hydra.env           | False  | hydra/config         |
+| hydra/config                | hydra               | True   | <root>               |
+| model/resnet18              | model               | False  | config_with_defaults |
+| optimizer/adam              | optimizer           | False  | config_with_defaults |
+| config_with_defaults        |                     | True   | <root>               |
+--------------------------------------------------------------------------------------
+```
+
+**Understanding the columns:**
+- **Config path**: Path to the config file
+- **Package**: Where this config's content will be placed in the final config
+- **_self_**: Whether this entry represents the current file's own content
+- **Parent**: Which config file loaded this config
+
+**Reading the table:**
+- Hydra's internal configs are loaded first (hydra/...)
+- Then your config groups are loaded (model/resnet18, optimizer/adam)
+- The `_self_` entries show when each file's own content is merged
+
+**Use this when:**
+- You're not sure which config files are being loaded
+- Config values aren't what you expected (check the order)
+- Debugging package placement issues
+
+#### Viewing Defaults Tree
+
+The defaults tree shows the hierarchical structure of config composition:
+
+```bash
+python logging_05/logging_demo.py --config-name=config_with_defaults --info defaults-tree
+```
+```
+Defaults Tree
+*************
+<root>:
+  hydra/config:
+    hydra/output: default
+    hydra/launcher: basic
+    hydra/sweeper: basic
+    hydra/help: default
+    hydra/hydra_help: default
+    hydra/hydra_logging: default
+    hydra/job_logging: default
+    hydra/callbacks: null
+    hydra/env: default
+    _self_
+  config_with_defaults:
+    model: resnet18
+    optimizer: adam
+    _self_
+```
+
+**Understanding the tree:**
+- `<root>` is the top level
+- `hydra/config` loads all of Hydra's default configs
+- `config_with_defaults` loads `model: resnet18` and `optimizer: adam`
+- `_self_` shows where each config's own content is applied
+
+**This is more intuitive than the defaults list for understanding:**
+- Parent-child relationships between configs
+- Which config loaded which sub-configs
+- The overall composition structure
+
+**Use this when:**
+- Understanding complex config hierarchies
+- Debugging composition order issues
+- Learning how a new codebase structures its configs
+
+#### Viewing Search Path
+
+The search path shows where Hydra looks for config files:
+
+```bash
+python logging_05/logging_demo.py --info searchpath
+```
+```
+Config search path
+******************
+| Provider       | Search path                                                            |
+-------------------------------------------------------------------------------------------
+| hydra          | pkg://hydra.conf                                                       |
+| main           | file:///home/cyudhist/__projects__/Hydra-Essentials/logging_05/configs |
+| hydra-colorlog | pkg://hydra_plugins.hydra_colorlog.conf                                |
+| schema         | structured://                                                          |
+-------------------------------------------------------------------------------------------
+```
+
+**Understanding the providers:**
+- **hydra**: Hydra's built-in config files (launcher, sweeper, etc.)
+- **main**: Your application's config directory (specified in `@hydra.main`)
+- **hydra-colorlog**: Plugin providing colorized logging configs
+- **schema**: For structured configs (Python dataclasses)
+
+**Use this when:**
+- Configs aren't being found
+- Understanding which plugin configs are available
+- Debugging config path issues
+
+### 5.6 Hydra's Working Directory Behavior
+
+By default, Hydra changes the working directory to the output directory. This can affect how your code accesses files.
+
+#### Default Behavior
+
+When you run a Hydra application without any flags:
+
+```python
+import os
+print(f"Working directory: {os.getcwd()}")
+```
+
+```bash
+python logging_05/logging_demo.py
+```
+
+The working directory will be something like:
+```
+/home/user/project/outputs/2025-11-14/21-08-57
+```
+
+**Why Hydra does this:**
+- Makes it easy to save outputs (just write to current directory)
+- All outputs from one run are in one place
+- Prevents runs from overwriting each other's outputs
+
+#### Disabling Directory Change
+
+Prevent Hydra from changing the working directory:
+
+```bash
+python logging_05/logging_demo.py hydra.job.chdir=False
+```
+
+Now the working directory stays where you launched the script.
+
+**When to use `hydra.job.chdir=False`:**
+- During development/debugging
+- When your code has hardcoded relative paths
+- When you want outputs in a specific location
+- When integrating with other tools
+
+#### Accessing Original Working Directory
+
+If Hydra changed the directory, you can still access the original location:
+
+```python
+from hydra.utils import get_original_cwd
+
+original_dir = get_original_cwd()
+data_path = f"{original_dir}/data/dataset.csv"
+```
+
+This is useful when you need to load data from the original location but want to save outputs to Hydra's output directory.
+
+### 5.7 Verbose Mode and Hydra Runtime Information
+
+The `hydra.verbose` setting controls how much information Hydra prints about its operation.
+
+#### Enabling Verbose Mode
+
+```yaml
+hydra:
+  verbose: true  # Show detailed Hydra information
+```
+
+Or from CLI:
+
+```bash
+python logging_05/logging_demo.py hydra.verbose=true
+```
+
+#### What Verbose Mode Shows
+
+With `verbose: true`, Hydra prints:
+
+1. **Hydra version and installed plugins**:
+```
+[2025-11-14 21:08:40,396][HYDRA] Hydra 1.3.2
+[2025-11-14 21:08:40,396][HYDRA] ===========
+[2025-11-14 21:08:40,396][HYDRA] Installed Hydra Plugins
+[2025-11-14 21:08:40,396][HYDRA] ***********************
+[2025-11-14 21:08:40,396][HYDRA] 	ConfigSource:
+[2025-11-14 21:08:40,397][HYDRA] 	-------------
+[2025-11-14 21:08:40,397][HYDRA] 		FileConfigSource
+[2025-11-14 21:08:40,397][HYDRA] 		ImportlibResourcesConfigSource
+[2025-11-14 21:08:40,397][HYDRA] 		StructuredConfigSource
+```
+
+2. **Config search path**:
+```
+[2025-11-14 21:08:40,399][HYDRA] Config search path
+[2025-11-14 21:08:40,399][HYDRA] ******************
+[2025-11-14 21:08:40,499][HYDRA] | Provider       | Search path                      |
+[2025-11-14 21:08:40,499][HYDRA] | main           | file:///.../logging_05/configs   |
+```
+
+3. **Composition information**: Which configs are being loaded and merged
+
+4. **Override information**: What overrides are being applied
+
+**Use verbose mode when:**
+- Debugging configuration issues
+- Understanding what Hydra is doing
+- Troubleshooting plugin or search path problems
+- Learning how Hydra works
+
+**Disable verbose mode when:**
+- Running production code
+- You want cleaner logs
+- Running many experiments (less noise in logs)
+
+### 5.8 Common Use Cases and Troubleshooting
+
+Here are practical examples of using Hydra's debugging tools to solve real problems.
+
+#### Use Case 1: "My config value is not what I expected"
+
+**Problem:** You set `training.batch_size=256` but your code is using 128.
+
+**Solution:** Check the final config and defaults order:
+
+```bash
+# 1. View final config
+python logging_05/logging_demo.py training.batch_size=256 --cfg job
+
+# 2. If value is still wrong, check the defaults tree
+python logging_05/logging_demo.py training.batch_size=256 --info defaults-tree
+
+# 3. Check if _self_ is in the wrong position
+```
+
+**Common causes:**
+- Another config loaded later is overriding your value
+- `_self_` is before the config that sets the value
+- Typo in the override path
+
+#### Use Case 2: "Hydra can't find my config file"
+
+**Problem:** `Error: Could not find 'my_config' in config group 'model'`
+
+**Solution:** Check the search path and available configs:
+
+```bash
+# 1. Verify search path is correct
+python logging_05/logging_demo.py --info searchpath
+
+# 2. Check if the file exists in the right location
+ls -la logging_05/configs/model/
+
+# 3. Verify the config group structure
+```
+
+**Common causes:**
+- Config file is in the wrong directory
+- Typo in filename
+- `config_path` in `@hydra.main()` is incorrect
+
+#### Use Case 3: "Interpolation isn't working"
+
+**Problem:** `${model.name}` appears as literal text instead of resolving
+
+**Solution:** Use `--resolve` to debug interpolations:
+
+```bash
+# 1. View interpolations without resolving
+python logging_05/logging_demo.py --cfg job
+
+# 2. Try to resolve them
+python logging_05/logging_demo.py --cfg job --resolve
+
+# If --resolve fails, it will show the error
+```
+
+**Common causes:**
+- Reference to non-existent key
+- Circular dependency in interpolations
+- Wrong interpolation syntax (should be `${key.subkey}`, not `{key.subkey}`)
+
+#### Use Case 4: "I don't know which config is being used"
+
+**Problem:** Multiple config files, not sure which one is active
+
+**Solution:** Check the defaults list:
+
+```bash
+python logging_05/logging_demo.py --info defaults
+```
+
+Look at the "Config path" column to see exactly which files are loaded.
+
+#### Use Case 5: "My overrides aren't being applied"
+
+**Problem:** CLI overrides seem to be ignored
+
+**Solution:** Check the saved overrides and final config:
+
+```bash
+# 1. Run with overrides
+python logging_05/logging_demo.py training.batch_size=512 model.name=resnet50
+
+# 2. Check what overrides were saved
+cat outputs/2025-11-14/*/.hydra/overrides.yaml
+
+# 3. Check final config
+cat outputs/2025-11-14/*/.hydra/config.yaml
+```
+
+**Common causes:**
+- Typo in override path
+- Config loaded after `_self_` is overriding your CLI override
+- Wrong syntax (use `=` not `:`)
+
+#### Use Case 6: "Debugging composition with packages"
+
+**Problem:** Config content appears in the wrong place due to package directives
+
+**Solution:** Use `--info defaults` to see package placement:
+
+```bash
+python logging_05/logging_demo.py --info defaults
+```
+
+Look at the "Package" column to see where each config's content will be placed.
+
+### 5.9 Best Practices and Common Pitfalls
+
+#### Best Practices
+
+**1. Always use `--cfg job` before running experiments**
+
+Before launching a large multirun, verify the config is correct:
+```bash
+python logging_05/logging_demo.py -m param1=a,b,c param2=1,2,3 --cfg job
+```
+
+**2. Use descriptive experiment names**
+
+Override the output directory with meaningful names:
+```bash
+python logging_05/logging_demo.py \
+  hydra.run.dir=outputs/resnet18_baseline_${now:%Y-%m-%d_%H-%M-%S}
+```
+
+**3. Keep verbose mode on during development**
+
+```yaml
+hydra:
+  verbose: true  # Shows what Hydra is doing
+```
+
+Turn it off for production runs to reduce log noise.
+
+**4. Use `--info defaults-tree` to understand complex configs**
+
+When working with a new codebase, start with:
+```bash
+python app.py --info defaults-tree
+```
+
+This quickly shows you how configs are organized.
+
+**5. Check saved configs after runs**
+
+After important experiments, verify what config was actually used:
+```bash
+cat outputs/2025-11-14/21-10-14/.hydra/config.yaml
+```
+
+**6. Use `hydra.job.chdir=False` during development**
+
+This keeps your working directory stable while you develop:
+```bash
+python logging_05/logging_demo.py hydra.job.chdir=False
+```
+
+#### Common Pitfalls
+
+**Pitfall 1: Forgetting about the changed working directory**
+
+**Problem:**
+```python
+# This fails because working directory changed
+data = load_data("./data/dataset.csv")
+```
+
+**Solution:**
+```python
+from hydra.utils import get_original_cwd
+data = load_data(f"{get_original_cwd()}/data/dataset.csv")
+```
+
+Or use `hydra.job.chdir=False`.
+
+**Pitfall 2: Not checking interpolations before running**
+
+**Problem:** Interpolations have errors, but you only discover this after a long training run.
+
+**Solution:** Always use `--cfg job --resolve` first:
+```bash
+python app.py --cfg job --resolve
+```
+
+**Pitfall 3: Confusing job config with Hydra config**
+
+**Problem:** Trying to override Hydra's settings like job config:
+
+```bash
+# Wrong
+python app.py run.dir=./my_outputs
+
+# Right
+python app.py hydra.run.dir=./my_outputs
+```
+
+**Remember:** Hydra's settings are under the `hydra` key.
+
+**Pitfall 4: Not understanding the defaults list order**
+
+**Problem:** Config values are wrong because you don't understand merge order.
+
+**Solution:** Use `--info defaults` to see the exact order:
+```bash
+python app.py --info defaults
+```
+
+Later entries override earlier ones.
+
+**Pitfall 5: Losing track of experiments**
+
+**Problem:** Hundreds of timestamped directories, can't find the right run.
+
+**Solution:**
+- Use meaningful output directories
+- Add experiment name to config
+- Use git commit hash in output path:
+
+```yaml
+hydra:
+  run:
+    dir: outputs/${experiment_name}/${now:%Y-%m-%d}/${now:%H-%M-%S}
+```
+
+**Pitfall 6: Not using version control for configs**
+
+**Problem:** Config files change over time, can't reproduce old results.
+
+**Solution:**
+- Keep configs in git
+- The `.hydra/config.yaml` file saves the exact config used
+- Add git hash to experiment name for tracking
+
+### 5.10 Test Commands
+
+All examples in this section can be tested with the following commands. Run from the project root directory.
+
+**Note:** All commands include `hydra.job.chdir=False` where appropriate to prevent Hydra from creating output directories and changing the working directory during testing.
+
+#### Basic Debugging
+
+```bash
+# View job config
+python logging_05/logging_demo.py --cfg job
+
+# View specific package
+python logging_05/logging_demo.py --cfg job --package training
+
+# View Hydra's configuration
+python logging_05/logging_demo.py --cfg hydra | head -50
+
+# View all configuration
+python logging_05/logging_demo.py --cfg all | head -50
+```
+
+#### Config Composition Debugging
+
+```bash
+# View defaults list
+python logging_05/logging_demo.py --config-name=config_with_defaults --info defaults
+
+# View defaults tree
+python logging_05/logging_demo.py --config-name=config_with_defaults --info defaults-tree
+
+# View search path
+python logging_05/logging_demo.py --info searchpath
+```
+
+#### Interpolation Debugging
+
+```bash
+# View interpolations (not resolved)
+python logging_05/logging_demo.py --config-name=config_with_interpolation --cfg job
+
+# View interpolations (resolved)
+python logging_05/logging_demo.py --config-name=config_with_interpolation --cfg job --resolve
+```
+
+#### Running with Different Logging Modes
+
+```bash
+# Run with default logging (creates log file and output directory)
+python logging_05/logging_demo.py --config-name=config_with_logging
+
+# Run with no logging (console only, verbose mode, no output directory)
+python logging_05/logging_demo.py --config-name=config_no_logging hydra.job.chdir=False
+
+# Run with overrides
+python logging_05/logging_demo.py training.batch_size=256 model.name=resnet50
+
+# Run multirun
+python logging_05/logging_demo.py -m training.batch_size=32,64,128 hydra.job.chdir=False
+```
+
+#### Checking Output Files
+
+```bash
+# List recent output directories
+ls -lt outputs/$(date +%Y-%m-%d)/ 2>/dev/null || echo "No outputs today"
+
+# View log file from latest run
+find outputs -name "*.log" -type f | tail -1 | xargs cat
+
+# View saved config from latest run
+find outputs -name "config.yaml" -path "*/.hydra/*" -type f | tail -1 | xargs cat
+
+# View overrides from latest run
+find outputs -name "overrides.yaml" -path "*/.hydra/*" -type f | tail -1 | xargs cat
+```
+
+### 5.11 Files in logging_05/ Directory
+
+```
+logging_05/
+├── configs/
+│   ├── config.yaml                      # Basic config
+│   ├── config_with_logging.yaml         # Config with logging enabled and verbose mode
+│   ├── config_no_logging.yaml           # Config with logging disabled (console only)
+│   ├── config_with_interpolation.yaml   # Config with interpolations for --resolve demo
+│   ├── config_with_defaults.yaml        # Config with defaults for --info demos
+│   ├── model/
+│   │   └── resnet18.yaml                # Model config group
+│   └── optimizer/
+│       ├── adam.yaml                    # Adam optimizer config
+│       └── sgd.yaml                     # SGD optimizer config
+└── logging_demo.py                      # Main demo script with logging examples
 ```
 
 ## 6. Instantiate
 
-We can instantiate a class using hydra. This is useful when we want to instantiate a class with a config file. We use the `_target_` key to specify the class to instantiate and the `name` key to pass the name to the class.
-We can also use the `hydra.utils.instantiate` function to instantiate the class.
+Hydra's `instantiate` function allows you to create Python objects directly from configuration files. This is a powerful feature that enables you to configure complex object hierarchies declaratively.
+
+**All examples in this section are located in the `instantiate_06/` directory.** See `instantiate_06/README.md` for quick reference commands.
+
+### 6.1 Basic Instantiation
+
+We use the `_target_` key to specify the class to instantiate, and other keys become constructor arguments.
 
 ```yaml
-#scripts/instantiate_config.yaml
+#instantiate_06/instantiate_config.yaml
 my_class:
   # we are specifying the class to instantiate
-  _target_: scripts.instantiate.MyClass
+  _target_: instantiate_06.instantiate.MyClass
   # we are passing the name to the class
   name: Paul
 ```
 
 ```python
-#scripts/instantiate.py
+#instantiate_06/instantiate.py
 import hydra
 from omegaconf import DictConfig
 from hydra.utils import instantiate
@@ -887,18 +2569,20 @@ if __name__ == "__main__":
     main()
 ```
 
-Running the script as a module wih  `-m` flag will print:  
+Running the script as a module with `-m` flag will print:
 
 ```bash
-╰─$ python -m scripts.instantiate
+python -m instantiate_06.instantiate
 Hello, John!
 Hello, Paul!
 ```
 
-Now what if we want to instantiate a class which depends on other classes? We can use the `_partial_` key to tell hydra that this is a partial config and it will not raise an error if the config is not complete.
+### 6.2 Partial Instantiation
+
+The `_partial_` key creates a partial function instead of immediately instantiating the object. This is useful for classes that require parameters you don't have yet (like optimizers needing model parameters).
 
 ```yaml
-#scripts/instantiate_config.yaml
+#instantiate_06/instantiate_config.yaml
 optimizer:
   # we are specifying the class to instantiate
   _target_: torch.optim.Adam
@@ -911,10 +2595,10 @@ optimizer:
   eps: 1e-6
 ```
 
-We create the partial optimizer by passing the parameters to the optimizer class. Note we could have not passed the parameters to the optimizer class and it would have been instantiated with the default parameters.
+The partial optimizer can be called later with the missing parameters:
 
 ```python
-#scripts/instantiate.py
+#instantiate_06/instantiate.py
 import hydra
 from omegaconf import DictConfig
 from hydra.utils import instantiate
@@ -923,6 +2607,7 @@ import warnings
 warnings.filterwarnings("ignore")
 
 from rich import print
+
 
 class MyClass:
     def __init__(self, name: str):
@@ -958,7 +2643,7 @@ if __name__ == "__main__":
 Running the script will print:
 
 ```bash
-╰─$ python -m scripts.instantiate
+python -m instantiate_06.instantiate
 Instantiating optimizer...
 Parameters: Parameter containing:
 tensor([-0.6364,  1.1314,  0.6071,  0.0829,  0.6568,  0.7903, -0.5078,  1.7053,
@@ -979,6 +2664,334 @@ Parameter Group 0
     weight_decay: 0
 )
 ```
+
+### 6.3 Recursive Instantiation
+
+By default, Hydra recursively instantiates nested configs that contain `_target_`. This allows you to build complex object hierarchies.
+
+```yaml
+#instantiate_06/instantiate_recursive_config.yaml
+model:
+  _target_: instantiate_06.instantiate_recursive.SimpleModel
+  # These nested configs will also be instantiated
+  backbone:
+    _target_: instantiate_06.instantiate_recursive.Backbone
+    hidden_size: 512
+  head:
+    _target_: instantiate_06.instantiate_recursive.Head
+    num_classes: 10
+```
+
+```python
+#instantiate_06/instantiate_recursive.py
+class Backbone:
+    def __init__(self, hidden_size: int):
+        self.hidden_size = hidden_size
+        print(f"Backbone created with hidden_size={hidden_size}")
+
+
+class Head:
+    def __init__(self, num_classes: int):
+        self.num_classes = num_classes
+        print(f"Head created with num_classes={num_classes}")
+
+
+class SimpleModel:
+    def __init__(self, backbone, head):
+        self.backbone = backbone
+        self.head = head
+        print("SimpleModel created with backbone and head")
+
+
+@hydra.main(config_path=".", config_name="instantiate_recursive_config", version_base=None)
+def main(config: DictConfig):
+    # This will recursively instantiate backbone and head, then pass them to SimpleModel
+    model = instantiate(config.model)
+    print(f"Model backbone hidden_size: {model.backbone.hidden_size}")
+    print(f"Model head num_classes: {model.head.num_classes}")
+```
+
+Output:
+
+```bash
+python -m instantiate_06.instantiate_recursive
+Backbone created with hidden_size=512
+Head created with num_classes=10
+SimpleModel created with backbone and head
+Model backbone hidden_size: 512
+Model head num_classes: 10
+```
+
+### 6.4 Advanced Parameters
+
+#### Using `_recursive_` to Control Nested Instantiation
+
+You can disable recursive instantiation with `_recursive_: false`:
+
+```yaml
+#instantiate_06/instantiate_no_recursive_config.yaml
+model:
+  _target_: instantiate_06.instantiate_no_recursive.ModelWithConfig
+  _recursive_: false  # Don't instantiate nested configs
+  # This will be passed as a DictConfig, not an instantiated object
+  layer_config:
+    _target_: torch.nn.Linear
+    in_features: 10
+    out_features: 5
+```
+
+```python
+#instantiate_06/instantiate_no_recursive.py
+class ModelWithConfig:
+    def __init__(self, layer_config):
+        # layer_config is a DictConfig, not an instantiated Linear layer
+        print(f"Received config: {layer_config}")
+        # You can manually instantiate it later if needed
+        from hydra.utils import instantiate
+        self.layer = instantiate(layer_config)
+```
+
+Run it:
+
+```bash
+python -m instantiate_06.instantiate_no_recursive
+```
+
+#### Using `_args_` for Positional Arguments
+
+```yaml
+#instantiate_06/instantiate_args_config.yaml
+my_function:
+  _target_: instantiate_06.instantiate_args.my_function
+  # Positional arguments
+  _args_:
+    - "first positional arg"
+    - "second positional arg"
+  # Keyword arguments
+  keyword_arg: "keyword value"
+```
+
+```python
+#instantiate_06/instantiate_args.py
+def my_function(pos1, pos2, keyword_arg=None):
+    print(f"pos1={pos1}, pos2={pos2}, keyword_arg={keyword_arg}")
+
+
+@hydra.main(config_path=".", config_name="instantiate_args_config", version_base=None)
+def main(config: DictConfig):
+    instantiate(config.my_function)
+```
+
+Output:
+
+```bash
+python -m instantiate_06.instantiate_args
+pos1=first positional arg, pos2=second positional arg, keyword_arg=keyword value
+```
+
+#### Using `_convert_` to Control Container Conversion
+
+The `_convert_` parameter controls how OmegaConf containers are converted:
+
+```yaml
+#instantiate_06/instantiate_convert_config.yaml
+my_class:
+  _target_: instantiate_06.instantiate_convert.MyClass
+  _convert_: all  # Options: none, partial, all (default)
+  data:
+    nested: value
+```
+
+- `_convert_: "none"` - Pass OmegaConf containers as-is
+- `_convert_: "partial"` - Convert only the top-level container
+- `_convert_: "all"` - Convert all nested containers to dict/list (default)
+
+Run it:
+
+```bash
+python -m instantiate_06.instantiate_convert
+```
+
+### 6.5 Additional Utilities
+
+#### Using `get_class()` to Get Class Without Instantiation
+
+Sometimes you want to get the class itself without instantiating it:
+
+```python
+#instantiate_06/instantiate_get_class.py
+from hydra.utils import get_class
+
+@hydra.main(config_path=".", config_name="instantiate_config", version_base=None)
+def main(config: DictConfig):
+    # Get the class without instantiating
+    optimizer_class = get_class("torch.optim.Adam")
+    print(f"Got class: {optimizer_class}")
+
+    # Use it later with your own parameters
+    model = torch.nn.Linear(10, 5)
+    optimizer = optimizer_class(model.parameters(), lr=0.001)
+    print(f"Created optimizer: {optimizer}")
+```
+
+Output:
+
+```bash
+python -m instantiate_06.instantiate_get_class
+Got class: <class 'torch.optim.adam.Adam'>
+Created optimizer: Adam (...)
+```
+
+#### Using `call()` to Call Functions
+
+The `call()` function is similar to `instantiate()` but for calling functions instead of constructing objects:
+
+```python
+#instantiate_06/instantiate.py
+from hydra.utils import call
+
+@hydra.main(config_path=".", config_name="instantiate_config", version_base=None)
+def main(config: DictConfig):
+    # Call a function from config
+    result = call(config.my_function)
+```
+
+### 6.6 Common Pitfalls and Best Practices
+
+#### Pitfall 1: Forgetting `_partial_: true` for Optimizers
+
+**Problem:**
+
+```yaml
+optimizer:
+  _target_: torch.optim.Adam
+  lr: 0.001
+```
+
+This will fail because `Adam` requires `params` as the first argument, which you don't have yet.
+
+**Solution:**
+
+```yaml
+optimizer:
+  _target_: torch.optim.Adam
+  _partial_: true  # Create a partial function
+  lr: 0.001
+```
+
+#### Pitfall 2: Incorrect Import Path in `_target_`
+
+**Problem:**
+
+```yaml
+model:
+  _target_: MyModel  # Wrong - no module path
+```
+
+**Solution:**
+
+```yaml
+model:
+  _target_: models.MyModel  # Correct - full import path
+```
+
+The path must be importable from your Python environment. Use the same path you would use in `from X import Y`.
+
+#### Pitfall 3: Mixing Positional and Keyword Arguments Incorrectly
+
+**Problem:**
+
+```yaml
+my_class:
+  _target_: MyClass
+  _args_:
+    - arg1
+  arg1: different_value  # Conflict!
+```
+
+**Solution:** Use either positional arguments (`_args_`) OR keyword arguments, not both for the same parameter.
+
+#### Pitfall 4: Not Understanding When Recursive Instantiation Happens
+
+By default, any nested dict with `_target_` gets instantiated. If you want to pass a config dict without instantiating it, use `_recursive_: false`.
+
+**Example:**
+
+```yaml
+model:
+  _target_: MyModel
+  _recursive_: false
+  config:
+    _target_: SomeClass  # This won't be instantiated
+```
+
+#### Best Practice: Use Type Hints in Your Classes
+
+Type hints make it easier to understand what parameters your classes expect:
+
+```python
+class MyModel:
+    def __init__(self, hidden_size: int, dropout: float = 0.1):
+        self.hidden_size = hidden_size
+        self.dropout = dropout
+```
+
+This helps when writing configs, as you know what types to provide.
+
+### 6.7 Test Commands
+
+All examples in this section can be tested with the following commands. Run from the project root directory:
+
+**Note:** All commands include `hydra.job.chdir=False` to prevent Hydra from creating output directories and changing the working directory. This makes the examples easier to run and test.
+
+#### 6.1 Basic Instantiation
+```bash
+python -m instantiate_06.instantiate hydra.job.chdir=False
+```
+
+#### 6.2 Partial Instantiation
+```bash
+python -m instantiate_06.instantiate hydra.job.chdir=False
+```
+(Same script as 6.1, demonstrates both basic and partial instantiation)
+
+#### 6.3 Recursive Instantiation
+```bash
+python -m instantiate_06.instantiate_recursive hydra.job.chdir=False
+```
+
+#### 6.4 Advanced Parameters
+
+**Using `_recursive_` to control nested instantiation:**
+```bash
+python -m instantiate_06.instantiate_no_recursive hydra.job.chdir=False
+```
+
+**Using `_args_` for positional arguments:**
+```bash
+python -m instantiate_06.instantiate_args hydra.job.chdir=False
+```
+
+**Using `_convert_` to control container conversion:**
+```bash
+python -m instantiate_06.instantiate_convert hydra.job.chdir=False
+```
+
+#### 6.5 Additional Utilities
+
+**Using `get_class()` to get class without instantiation:**
+```bash
+python -m instantiate_06.instantiate_get_class hydra.job.chdir=False
+```
+
+### 6.8 Files in instantiate_06/ Directory
+
+- `instantiate.py` + `instantiate_config.yaml` - Basic and partial instantiation
+- `instantiate_recursive.py` + `instantiate_recursive_config.yaml` - Recursive instantiation
+- `instantiate_no_recursive.py` + `instantiate_no_recursive_config.yaml` - Disable recursive instantiation
+- `instantiate_args.py` + `instantiate_args_config.yaml` - Positional arguments with `_args_`
+- `instantiate_convert.py` + `instantiate_convert_config.yaml` - Container conversion with `_convert_`
+- `instantiate_get_class.py` - Get class without instantiation using `get_class()`
 
 ------------------------------------------------------------------------------------------------------------------------------------------
 

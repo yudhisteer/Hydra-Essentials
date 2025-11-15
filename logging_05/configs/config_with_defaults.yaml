@@ -1,0 +1,10 @@
+defaults:
+  - model: resnet18
+  - optimizer: adam
+  - _self_
+
+training:
+  batch_size: 128
+  epochs: 30
+
+seed: 42

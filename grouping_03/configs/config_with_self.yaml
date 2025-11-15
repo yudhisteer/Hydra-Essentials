@@ -1,0 +1,7 @@
+defaults:
+  - experiment: experiment_with_resnet18
+  - override experiment: experiment_with_resnet50
+  - _self_
+
+experiment:
+  optimizer: SGD

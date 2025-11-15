@@ -1,0 +1,8 @@
+model:
+  _target_: instantiate_06.instantiate_no_recursive.ModelWithConfig
+  _recursive_: false  # Don't instantiate nested configs
+  # This will be passed as a DictConfig, not an instantiated object
+  layer_config:
+    _target_: torch.nn.Linear
+    in_features: 10
+    out_features: 5

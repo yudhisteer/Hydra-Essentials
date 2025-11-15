@@ -1,0 +1,3 @@
+defaults:
+  - experiment: experiment_with_resnet18
+  - override experiment: experiment_with_resnet50

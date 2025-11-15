@@ -1,0 +1,18 @@
+defaults:
+  - _self_
+  - override hydra/job_logging: default
+
+training:
+  batch_size: 128
+  epochs: 30
+  lr: 0.001
+  optimizer: adam
+
+model:
+  name: resnet18
+  pretrained: true
+
+seed: 42
+
+hydra:
+  verbose: true

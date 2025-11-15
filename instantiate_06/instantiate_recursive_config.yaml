@@ -1,0 +1,9 @@
+model:
+  _target_: instantiate_06.instantiate_recursive.SimpleModel
+  # These nested configs will also be instantiated
+  backbone:
+    _target_: instantiate_06.instantiate_recursive.Backbone
+    hidden_size: 512
+  head:
+    _target_: instantiate_06.instantiate_recursive.Head
+    num_classes: 10

@@ -1,0 +1,7 @@
+my_class:
+  _target_: instantiate_06.instantiate_convert.MyClass
+  _convert_: all  # Options: none, partial, all (default)
+  data:
+    nested: value
+    another_nested:
+      deep: data

@@ -1,0 +1,17 @@
+training:
+  batch_size: 128
+  epochs: 30
+  lr: 0.001
+  optimizer: adam
+
+model:
+  name: resnet18
+  pretrained: true
+  input_size: 224
+
+# Interpolations
+experiment_name: ${model.name}_bs${training.batch_size}_lr${training.lr}
+checkpoint_path: ./checkpoints/${experiment_name}
+log_dir: ./logs/${experiment_name}
+
+seed: 42
