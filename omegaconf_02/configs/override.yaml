@@ -1,0 +1,11 @@
+model:
+  pretrained: true
+  dropout: 0.5
+
+training:
+  batch_size: 128
+  epochs: 100
+
+optimizer:
+  type: adam
+  weight_decay: 0.0001

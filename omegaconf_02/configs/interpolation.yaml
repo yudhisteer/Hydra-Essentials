@@ -1,0 +1,15 @@
+server:
+  host: localhost
+  port: 8080
+  url: ${server.host}:${server.port}
+
+client:
+  server_url: ${server.url}
+  timeout: 30
+  description: Client connecting to ${.server_url}
+
+paths:
+  root: /data
+  train: ${paths.root}/train
+  test: ${paths.root}/test
+  output: ${paths.root}/output
