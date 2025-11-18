@@ -1189,19 +1189,12 @@ config.value = "123"  # Error! String cannot be assigned to int field
 
 ## 3. Config Groups
 
-Hydra's config groups allow you to organize related configurations into groups and easily switch between them. This is fundamental for managing different experiments, models, datasets, or any other configuration variants.
+Hydra's config groups allow us to organize related configurations into groups and easily switch between them. This is fundamental for managing different experiments, models, and datasets. 
 
-**Why use config groups?**
-- **Organization**: Keep related configs together (e.g., all model configs in `configs/model/`)
-- **Reusability**: Define configs once, use them across multiple experiments
-- **Flexibility**: Switch between configurations easily via CLI or defaults
-- **Maintainability**: Easier to manage large projects with many configuration variants
-- **Composition**: Combine multiple config groups to create complete configurations
 
 **How it works:**
-Config groups are organized in subdirectories under your config path. The subdirectory name becomes the group name, and each YAML file in that directory is an option for that group.
+Config groups are organized in subdirectories under your config path. The `subdirectory name` becomes the `group name`, and each `YAML file` in that directory is an `option` for that group. Got it?
 
-**All examples in this section are located in the `grouping_03/` directory.**
 
 ### 3.1 Basic Config Groups
 
@@ -1258,6 +1251,9 @@ if __name__ == "__main__":
     main()
 ```
 
+Note when running the command above, by default (with no config groups in config.yaml), it will print an empty `{}`. If config groups (like `experiment`) are added via CLI or defaults, it will then print their content in YAML format.
+
+
 ### 3.2 Adding Config Groups from CLI
 
 With an empty `config.yaml`, we can add config groups from the command line using the `+` prefix: 
@@ -1271,6 +1267,13 @@ Run it:
 
 ```bash
 python grouping_03/grouping.py +experiment=experiment_with_resnet18 hydra.job.chdir=False
+```
+
+Note: The `hydra.job.chdir=False` keeps the working directory unchanged to the one where the script is located.
+
+Output: 
+
+```bash
 experiment:
   model: resnet18
   epochs: 100
@@ -1292,7 +1295,7 @@ experiment:
 
 ### 3.3 Setting Default Config Groups
 
-Instead of specifying config groups every time from the CLI, we can set defaults in `config.yaml`:
+Instead of specifying config groups every time from the CLI, we can set defaults in `config.yaml` using the `defaults` key.
 
 ```yaml
 #grouping_03/configs/config_with_defaults.yaml
@@ -1304,6 +1307,11 @@ Now we can run without specifying the experiment:
 
 ```bash
 python grouping_03/grouping.py --config-name=config_with_defaults hydra.job.chdir=False
+```
+
+Output:
+
+```bash
 experiment:
   model: resnet18
   epochs: 100
@@ -1312,11 +1320,6 @@ experiment:
   optimizer: adam
   scheduler: cosine
 ```
-
-**Benefits of defaults:**
-- No need to specify config groups on every run
-- Clear documentation of what configs are being used
-- Can still override from CLI: `experiment=experiment_with_resnet50`
 
 ### 3.4 Overriding Default Config Groups
 
@@ -1333,6 +1336,11 @@ This will use ResNet50:
 
 ```bash
 python grouping_03/grouping.py --config-name=config_with_override hydra.job.chdir=False
+```
+
+Output:
+
+```bash
 experiment:
   model: resnet50
   epochs: 100
@@ -1341,11 +1349,6 @@ experiment:
   optimizer: adam
   scheduler: cosine
 ```
-
-**Why use `override`?**
-- Makes it explicit that you're overriding a previous default
-- Prevents accidental duplication errors
-- Better for readability in complex configs
 
 ### 3.5 Using `_self_` to Control Merge Order
 
@@ -1362,16 +1365,21 @@ experiment:
   optimizer: SGD
 ```
 
-The `_self_` determines when values from the primary config are applied:
+The `_self_` determines when values from the primary config are applied. The primary config is the current YAML file that is being used - `config_with_self.yaml` in this case.
 
 ```bash
 python grouping_03/grouping.py --config-name=config_with_self hydra.job.chdir=False
+```
+
+Output:
+
+```bash
 experiment:
   model: resnet50
   epochs: 100
   batch_size: 128
   lr: 0.001
-  optimizer: SGD      # ← This overrides the optimizer from the default
+  optimizer: SGD      # ← This overrides the optimizer from the default (adam)
   scheduler: cosine
 ```
 
@@ -1404,7 +1412,7 @@ experiment:
   optimizer: SGD  # This gets overridden (result: adam)
 ```
 
-**Best practice:** Place `_self_` at the end so your explicit config values take precedence.
+Note: Place `_self_` at the end so your explicit config values take precedence.
 
 ### 3.6 Composing Multiple Config Groups
 
@@ -1432,6 +1440,11 @@ Running this will merge all configs:
 
 ```bash
 python grouping_03/grouping.py --config-name=config_with_merge hydra.job.chdir=False
+```
+
+Output:
+
+```bash
 experiment:
   model: resnet18
   epochs: 100
@@ -1457,7 +1470,7 @@ defaults:
 
 - **Config Group** (`experiment: option`): Subdirectory with multiple options
   - Located in `configs/experiment/`
-  - Requires `group: option` syntax
+  - Requires `group: option` syntax - IMPORTANT
   - Content placed under `experiment` key by default
 
 - **Standalone Config** (`demo_config`): Single YAML file in root
@@ -1526,28 +1539,6 @@ From CLI:
 python app.py model/vision=vit model/nlp=gpt
 ```
 
-**Benefits:**
-- Better organization for large projects
-- Logical grouping of related configs
-- Clearer config structure
-
-#### Config Search Path
-
-Hydra searches for configs in this order:
-
-1. **Current working directory** (if config_path is relative)
-2. **Specified config_path** in `@hydra.main()`
-3. **Additional search paths** (can be added programmatically)
-
-Example:
-
-```python
-@hydra.main(config_path="configs", config_name="config", version_base=None)
-def main(config: DictConfig):
-    pass
-```
-
-This looks for configs in `configs/` relative to where the script is run.
 
 ### 3.8 Common Use Cases
 
@@ -1604,6 +1595,8 @@ python app.py env=production
 
 #### Modular Training Configurations
 
+This organization enables swapping out models, datasets, optimizers, and other training specifics without duplicating configuration code, simply by changing the referenced file. 
+
 ```yaml
 #configs/config.yaml
 defaults:
@@ -1615,10 +1608,12 @@ defaults:
   - loss: cross_entropy
   - _self_
 
-# Global settings
+# Global training parameters (overrides)
 batch_size: 256
 num_workers: 8
 ```
+
+In summary, we achieve true modularity by breaking down the training configuration into small, focused components and combining them as needed to build different experiments.
 
 ### 3.9 Best Practices and Tips
 
@@ -1626,8 +1621,8 @@ num_workers: 8
 
 **1. Use meaningful group names:**
 ```
-✓ Good: configs/model/, configs/optimizer/, configs/dataset/
-✗ Bad: configs/m/, configs/opt/, configs/d/
+Good: configs/model/, configs/optimizer/, configs/dataset/
+Bad: configs/m/, configs/opt/, configs/d/
 ```
 
 **2. Keep configs focused:**
@@ -1715,59 +1710,7 @@ defaults:
 
 **Solution:** Design your config hierarchy carefully to avoid circular dependencies.
 
-### 3.10 Test Commands
-
-All examples in this section can be tested with the following commands. Run from the project root directory:
-
-**Note:** All commands include `hydra.job.chdir=False` to prevent Hydra from creating output directories.
-
-#### Adding config group from CLI
-```bash
-python grouping_03/grouping.py +experiment=experiment_with_resnet18 hydra.job.chdir=False
-```
-
-#### Using default config groups
-```bash
-python grouping_03/grouping.py --config-name=config_with_defaults hydra.job.chdir=False
-```
-
-#### Overriding defaults
-```bash
-python grouping_03/grouping.py --config-name=config_with_override hydra.job.chdir=False
-```
-
-#### Using _self_ for merge order
-```bash
-python grouping_03/grouping.py --config-name=config_with_self hydra.job.chdir=False
-```
-
-#### Composing multiple configs
-```bash
-python grouping_03/grouping.py --config-name=config_with_merge hydra.job.chdir=False
-```
-
-#### Switching configs from CLI
-```bash
-# Start with defaults, then switch experiment
-python grouping_03/grouping.py --config-name=config_with_defaults experiment=experiment_with_resnet50 hydra.job.chdir=False
-```
-
-### 3.11 Files in grouping_03/ Directory
-
-```
-grouping_03/
-├── configs/
-│   ├── config.yaml                      # Empty base config
-│   ├── config_with_defaults.yaml        # Config with default experiment
-│   ├── config_with_override.yaml        # Config with override keyword
-│   ├── config_with_self.yaml            # Config demonstrating _self_
-│   ├── config_with_merge.yaml           # Config merging multiple files
-│   ├── demo_config.yaml                 # Standalone config for merging
-│   └── experiment/
-│       ├── experiment_with_resnet18.yaml
-│       └── experiment_with_resnet50.yaml
-└── grouping.py                           # Main script
-```
+-----------------------------------------------------
 
 ## 4. Multirun
 
