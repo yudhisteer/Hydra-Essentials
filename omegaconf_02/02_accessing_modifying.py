@@ -23,7 +23,7 @@ def main() -> None:
     print("3. Safe access with OmegaConf.select()")
     print("="*60)
     # This won't raise an error if key doesn't exist
-    momentum = OmegaConf.select(config, "training.momentum", default=0.9)
+    momentum = OmegaConf.select(config, "training.momentum", default=0.9) # momentum is not in the config, so it will return the default value 0.9
     print(f"Momentum (with default): {momentum}")
 
     weight_decay = OmegaConf.select(config, "training.weight_decay")

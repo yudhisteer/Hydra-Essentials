@@ -53,6 +53,7 @@ def main() -> None:
 
     print(f"After update - batch_size: {base_copy.training.batch_size}")
     print(f"After update - pretrained: {base_copy.model.pretrained}")
+    print(f"After update - config: \n {OmegaConf.to_yaml(base_copy)}")
 
 
 if __name__ == "__main__":

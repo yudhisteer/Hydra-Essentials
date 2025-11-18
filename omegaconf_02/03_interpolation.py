@@ -1,3 +1,4 @@
+import os
 from omegaconf import OmegaConf
 from rich import print
 import warnings
@@ -42,7 +43,6 @@ def main() -> None:
     print("\n" + "="*60)
     print("5. Environment variable interpolation")
     print("="*60)
-    import os
     os.environ["APP_NAME"] = "MyApp"
     os.environ["VERSION"] = "1.0.0"
 

@@ -56,8 +56,9 @@ def main() -> None:
     print(f"Is struct? {OmegaConf.is_struct(config)}")
     try:
         config.new_field = "value"
+        #  structured configs still behave as if struct mode is enabled, so adding a new field raises an error.
     except Exception as e:
-        print(f"Error when adding new field: {type(e).__name__}")
+        print(f"Error when adding new field: {type(e).__name__}: {e}")
 
     print("\n" + "="*60)
     print("5. Merging with unstructured config")

@@ -68,7 +68,7 @@ def main() -> None:
 
     # Can use as regular dict
     python_dict["new_key"] = "works"
-    print(f"After adding key to dict: {python_dict}")
+    print(f"After adding key to dict: \n {python_dict}")
 
 
 if __name__ == "__main__":

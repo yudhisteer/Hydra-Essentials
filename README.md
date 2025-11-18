@@ -140,25 +140,25 @@ model:
 - ++model.name=resnet18
 ```
 
-------------------------------------------------------------------------------------------------------------------------------------
+----------------------------------------------------------------------------------
 
 ## 2. OmegaConf
 
-OmegaConf is a powerful Python library for configuration management. It serves as the foundation for Hydra's configuration system, providing hierarchical configuration with variable interpolation and merging capabilities.
+OmegaConf is a Python library for configuration management. Hydra's configuration system is built on top of OmegaConf, providing more advanced features which we will explore later.
 
-**Why use OmegaConf?**
-- **Hierarchical configurations**: Organize configs with nested structures
-- **Type safety**: Optional runtime type validation with structured configs (dataclasses)
-- **Variable interpolation**: Reference other config values with `${key.sub}`
-- **Config merging**: Combine multiple configs intelligently
-- **Missing value validation**: Mark mandatory fields with `???`
-- **Read-only and struct modes**: Prevent accidental modifications
-- **Environment variables**: Inject values from environment
+**Why should you use OmegaConf?**
+- Hierarchical configurations: Organize configs with nested structures
+- Type safety: Has runtime type validation with structured configs using dataclasses
+- Variable interpolation: Reference other config values with `${key.sub}`
+- Config merging: Combine multiple configs
+- Missing value validation: Mark mandatory fields with `???`
+- Read-only and struct modes: Prevent accidental modifications
+- Environment variables: Inject values from environment
 
 **How it works:**
-OmegaConf wraps Python dicts and lists in DictConfig and ListConfig objects, providing additional functionality like interpolation, validation, and type checking. Understanding OmegaConf is essential for effective Hydra usage.
+OmegaConf wraps Python dicts and lists in `DictConfig` and `ListConfig` objects, providing additional functionality like `interpolation`, `validation`, and `type checking`.
 
-**All examples in this section are located in the `omegaconf_02/` directory.**
+**Note: All examples in this section are located in the `omegaconf_02/` directory.**
 
 ### 2.1 Creating Configs
 
@@ -220,6 +220,20 @@ Output:
 config = OmegaConf.load("omegaconf_02/configs/training.yaml")
 ```
 
+```yaml
+#omegaconf_02/configs/training.yaml
+training:
+  batch_size: 128
+  epochs: 30
+  lr: 0.001
+  optimizer: adam
+  scheduler: cosine
+
+model:
+  name: resnet18
+  pretrained: true
+```
+
 #### Creating from Dotlist
 
 ```python
@@ -237,6 +251,8 @@ model:
   name: resnet50
 ```
 
+You can try the command above by running:
+
 **Test command:**
 ```bash
 python omegaconf_02/01_creating_configs.py
@@ -251,7 +267,24 @@ OmegaConf provides multiple ways to access configuration values:
 ```python
 #omegaconf_02/02_accessing_modifying.py
 config = OmegaConf.load("omegaconf_02/configs/training.yaml")
+```
 
+```yaml
+#omegaconf_02/configs/training.yaml
+training:
+  batch_size: 128
+  epochs: 30
+  lr: 0.001
+  optimizer: adam
+  scheduler: cosine
+
+model:
+  name: resnet18
+  pretrained: true
+```
+
+```python
+#omegaconf_02/02_accessing_modifying.py
 # Dot notation
 batch_size = config.training.batch_size  # 128
 model_name = config.model.name  # "resnet18"
@@ -463,6 +496,8 @@ except MissingMandatoryValue as e:
     print(f"Error: {e}")
 ```
 
+Here, we see that ??? is not considered missing by `OmegaConf.is_missing()`. However, if we try to access the missing value, it will raise an error.
+
 Output:
 ```
 Error: Missing mandatory value: database.username
@@ -496,13 +531,61 @@ python omegaconf_02/04_missing_values.py
 #omegaconf_02/05_merging.py
 base = OmegaConf.load("omegaconf_02/configs/base.yaml")
 override = OmegaConf.load("omegaconf_02/configs/override.yaml")
+```
 
+```yaml
+#omegaconf_02/configs/base.yaml
+model:
+  name: resnet18
+  layers: 18
+  pretrained: false
+
+training:
+  batch_size: 32
+  lr: 0.001
+```
+
+```yaml
+#omegaconf_02/configs/override.yaml
+model:
+  pretrained: true
+  dropout: 0.5
+
+training:
+  batch_size: 128
+  epochs: 100
+
+optimizer:
+  type: adam
+  weight_decay: 0.0001
+```
+
+
+```python
 # Merge returns new config
 merged = OmegaConf.merge(base, override)
 
 # Original configs unchanged
 print(f"Base batch_size: {base.training.batch_size}")  # 32
 print(f"Merged batch_size: {merged.training.batch_size}")  # 128
+```
+
+However, we now have a new config `merged` which is the merged of the `base` and `override` configs.
+
+```yaml
+Merged config:
+model:
+  name: resnet18
+  layers: 18
+  pretrained: true
+  dropout: 0.5
+training:
+  batch_size: 128
+  lr: 0.001
+  epochs: 100
+optimizer:
+  type: adam
+  weight_decay: 0.0001
 ```
 
 #### Merge Behavior
@@ -534,6 +617,16 @@ OmegaConf.update(config, "training.batch_size", 512)
 OmegaConf.update(config, "model.pretrained", True)
 ```
 
+```yaml
+model:
+  name: resnet18
+  layers: 18
+  pretrained: true
+training:
+  batch_size: 512
+  lr: 0.001
+```
+
 **Test command:**
 ```bash
 python omegaconf_02/05_merging.py
@@ -543,7 +636,7 @@ python omegaconf_02/05_merging.py
 
 #### Struct Mode - Prevents Adding New Keys
 
-By default, you can add new keys to configs. Struct mode prevents this to catch typos:
+By default, you can add new keys to configs. Struct mode prevents this to catch typos. However, you can still modify existing keys.
 
 ```python
 #omegaconf_02/06_struct_mode.py
@@ -568,6 +661,8 @@ Error: Key 'layers' is not in struct
 ```
 
 #### Read-Only Mode - Prevents All Modifications
+
+You can set a config to be read-only to prevent any modifications to the config such as adding new keys or modifying existing keys.
 
 ```python
 readonly_config = OmegaConf.create({"model": {"name": "resnet18"}})
@@ -602,6 +697,10 @@ print(type(python_dict))  # <class 'dict'>
 
 # Now it's a regular dict
 python_dict["new_key"] = "works"
+```
+
+```python
+ {'model': {'name': 'resnet18', 'layers': 18}, 'training': {'batch_size': 128}, 'new_key': 'works'}
 ```
 
 **Test command:**
@@ -704,6 +803,23 @@ training:
   lr: 0.001
   optimizer: adam
 seed: 42
+```
+
+Note: Structured configs behave as if struct mode is enabled, so we cannot add new fields to the config object.
+
+```python
+try:
+    merged.new_field = "value"
+except Exception as e:
+    print(f"Error when adding new field: {type(e).__name__}: {e}")
+```
+
+Output:
+```
+Error when adding new field: ConfigAttributeError: Key 
+'new_field' not in 'Config'
+    full_key: new_field
+    object_type=Config
 ```
 
 #### Converting Back to Python Object
@@ -813,6 +929,20 @@ config = OmegaConf.from_cli()
 # Load base config and merge with CLI
 base = OmegaConf.load("omegaconf_02/configs/training.yaml")
 merged = OmegaConf.merge(base, config)
+```
+
+```yaml
+#omegaconf_02/configs/training.yaml
+training:
+  batch_size: 128
+  epochs: 30
+  lr: 0.001
+  optimizer: adam
+  scheduler: cosine
+
+model:
+  name: resnet18
+  pretrained: true
 ```
 
 **Test command:**
@@ -1031,11 +1161,10 @@ if OmegaConf.is_missing(config, "password"):
 
 ```python
 # Wrong - single braces
-config: "{key}"  # Treated as literal string
+config: "{key}"  # Treated as literal string.
 
 # Wrong - missing oc. prefix for env vars
-env_var: "${ENV_VAR}"  # Won't work
-
+env_var: "${ENV_VAR}"  # Won't work.
 # Correct
 config: "${key}"
 env_var: "${oc.env:ENV_VAR}"
@@ -1056,82 +1185,7 @@ class Config:
 config = OmegaConf.structured(Config)
 config.value = "123"  # Error! String cannot be assigned to int field
 ```
-
-### 2.13 Test Commands
-
-All examples in this section can be tested with the following commands. Run from the project root directory.
-
-#### Creating Configs
-```bash
-python omegaconf_02/01_creating_configs.py
-```
-
-#### Accessing and Modifying
-```bash
-python omegaconf_02/02_accessing_modifying.py
-```
-
-#### Interpolation
-```bash
-python omegaconf_02/03_interpolation.py
-```
-
-#### Missing Values
-```bash
-python omegaconf_02/04_missing_values.py
-```
-
-#### Merging
-```bash
-python omegaconf_02/05_merging.py
-```
-
-#### Struct Mode and Read-Only
-```bash
-python omegaconf_02/06_struct_mode.py
-```
-
-#### Structured Configs (Dataclasses)
-```bash
-python omegaconf_02/07_structured_configs.py
-```
-
-#### Lists
-```bash
-python omegaconf_02/08_lists.py
-```
-
-#### CLI Integration
-```bash
-python omegaconf_02/09_cli.py training.batch_size=256 model.name=resnet50
-```
-
-#### Saving and Loading
-```bash
-python omegaconf_02/10_saving.py
-```
-
-### 2.14 Files in omegaconf_02/ Directory
-
-```
-omegaconf_02/
-├── configs/
-│   ├── training.yaml           # Basic training config
-│   ├── interpolation.yaml      # Examples of interpolations
-│   ├── missing_values.yaml     # Config with ??? mandatory values
-│   ├── base.yaml               # Base config for merging
-│   └── override.yaml           # Override config for merging
-├── 01_creating_configs.py      # Creating configs from different sources
-├── 02_accessing_modifying.py  # Accessing and modifying values
-├── 03_interpolation.py         # Variable interpolation examples
-├── 04_missing_values.py        # Handling missing mandatory values
-├── 05_merging.py               # Merging configurations
-├── 06_struct_mode.py           # Struct mode and read-only configs
-├── 07_structured_configs.py   # Dataclass-based structured configs
-├── 08_lists.py                 # Working with lists
-├── 09_cli.py                   # CLI argument parsing
-└── 10_saving.py                # Saving and loading configs
-```
+-------------------------------------------------------------------------
 
 ## 3. Config Groups
 
