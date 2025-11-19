@@ -1708,29 +1708,20 @@ defaults:
 # This creates an infinite loop!
 ```
 
-**Solution:** Design your config hierarchy carefully to avoid circular dependencies.
+Note: Design your config hierarchy carefully to avoid circular dependencies.
 
 -----------------------------------------------------
 
 ## 4. Multirun
 
-Hydra's multirun feature allows you to run multiple experiments by sweeping over different configuration options using the `-m` flag. This is essential for hyperparameter tuning, model comparison, and ablation studies.
-
-**Why use multirun?**
-- **Hyperparameter sweeps**: Test multiple learning rates, batch sizes, or architectures automatically
-- **Model comparisons**: Compare different models or loss functions systematically
-- **Ablation studies**: Test the impact of different components
-- **Reproducibility**: All experiment variations are tracked and logged
-- **Automation**: Eliminate manual script modifications for each experiment
+Hydra's multirun feature allows you to run multiple experiments by sweeping over different configuration options using the `-m` or `--multirun` flag. This is essential for hyperparameter tuning, model comparison, and ablation studies.
 
 **How it works:**
-Multirun creates a **cartesian product** of all parameter combinations. If you specify 2 experiments and 3 loss functions, you get 2 × 3 = 6 total jobs. Each job runs with a unique combination of parameters.
-
-**All examples in this section are located in the `multirun_04/` directory.**
+Multirun creates a **cartesian product** of all parameter combinations. If you specify 2 experiments and 3 loss functions, you get `2 × 3 = 6` total jobs. Each job runs with a unique combination of parameters.
 
 ### 4.1 Basic Multirun Setup
 
-We create configuration files for different experiments and loss functions:
+We create configuration files for different experiments and loss functions in the `multirun_04/configs/` directory.
 
 ```yaml
 #multirun_04/configs/loss_function/softmax.yaml
@@ -1819,6 +1810,11 @@ Each job runs with a unique combination:
 
 ```bash
 python multirun_04/multirun.py -m experiment=experiment_with_resnet18,experiment_with_resnet50 loss_function=arcface,cosface,softmax hydra.job.chdir=False
+```
+
+Output:
+
+```bash
 [2025-11-06 16:25:17,237][HYDRA] Launching 6 jobs locally
 [2025-11-06 16:25:17,237][HYDRA]        #0 : experiment=experiment_with_resnet18 loss_function=arcface
 experiment:
@@ -1940,7 +1936,10 @@ loss_function='glob(*, exclude=soft*)'  # All except softmax
 Notice that we use `exclude` to exclude the softmax loss function:
 
 ```bash
-python multirun_04/multirun.py -m experiment='glob(*)' loss_function='glob(*, exclude=soft*)' hydra.job.chdir=False                                       
+python multirun_04/multirun.py -m experiment='glob(*)' loss_function='glob(*, exclude=soft*)' hydra.job.chdir=False
+```
+
+```bash
 [2025-11-06 16:28:37,613][HYDRA] Launching 4 jobs locally
 [2025-11-06 16:28:37,613][HYDRA]        #0 : experiment=experiment_with_resnet18 loss_function=arcface
 experiment:
@@ -2060,20 +2059,6 @@ python multirun_04/multirun.py -m \
   hydra.job.chdir=False
 ```
 
-### 4.6 Best Practices and Tips
-
-#### When to Use Multirun
-
-**✓ Good use cases:**
-- Hyperparameter sweeps (learning rate, batch size, etc.)
-- Comparing different models or architectures
-- Testing multiple random seeds for statistical significance
-- Ablation studies to understand component importance
-
-**✗ Avoid for:**
-- Single experiments (use regular run instead)
-- Very long-running jobs that would take too long in sequence
-- When you need interactive debugging
 
 #### Tips for Effective Multirun
 
@@ -2102,10 +2087,6 @@ configs/
 │   └── resnet_large/
 ```
 
-**4. Track results systematically:**
-- Each multirun creates a timestamped directory
-- Use the job number to identify specific runs
-- The `multirun.yaml` file contains all job configurations
 
 #### Common Pitfalls
 
@@ -2128,33 +2109,6 @@ python multirun_04/multirun.py -m experiment.lr=0.1,0.01,0.001,0.0001
 python multirun_04/multirun.py -m experiment.lr=0.001 experiment.batch_size=32,64,128,256
 ```
 
-### 4.7 Test Commands
-
-All examples in this section can be tested with the following commands. Run from the project root directory:
-
-**Note:** All commands include `hydra.job.chdir=False` to prevent Hydra from creating output directories and changing the working directory.
-
-#### Basic Multirun (6 jobs)
-```bash
-python multirun_04/multirun.py -m experiment=experiment_with_resnet18,experiment_with_resnet50 loss_function=arcface,cosface,softmax hydra.job.chdir=False
-```
-
-#### Using Glob Syntax (4 jobs - excludes softmax)
-```bash
-python multirun_04/multirun.py -m experiment='glob(*)' loss_function='glob(*, exclude=soft*)' hydra.job.chdir=False
-```
-
-#### Single Run (no multirun)
-```bash
-python multirun_04/multirun.py hydra.job.chdir=False
-```
-
-#### Range Sweep Example
-```bash
-# Sweep over learning rates using direct values
-python multirun_04/multirun.py -m experiment.lr=0.1,0.01,0.001 hydra.job.chdir=False
-```
-
 ### 4.8 Advanced Features
 
 **Parallel Execution:**
@@ -2166,30 +2120,16 @@ By default, multirun jobs execute **sequentially** (one after another). For para
 - **Ray Launcher**: Distributed execution
 - **AWS Batch Launcher**: Cloud execution
 
-Example with Joblib (requires `hydra-joblib-launcher` plugin):
+Example with Joblib (requires `hydra-joblib-launcher` plugin(see [here](https://hydra.cc/docs/plugins/joblib_launcher/))):
 ```bash
 python multirun_04/multirun.py -m experiment='glob(*)' \
   hydra/launcher=joblib \
   hydra.launcher.n_jobs=4
 ```
 
-**Note:** For the examples in this tutorial, we use sequential execution for simplicity.
+Note: We need to explore more about this in later sections.
 
-### 4.9 Files in multirun_04/ Directory
-
-```
-multirun_04/
-├── configs/
-│   ├── config.yaml                        # Main config with defaults
-│   ├── experiment/
-│   │   ├── experiment_with_resnet18.yaml  # ResNet18 experiment config
-│   │   └── experiment_with_resnet50.yaml  # ResNet50 experiment config
-│   └── loss_function/
-│       ├── arcface.yaml                   # ArcFace loss config
-│       ├── cosface.yaml                   # CosFace loss config
-│       └── softmax.yaml                   # Softmax loss config
-└── multirun.py                            # Main script for multirun examples
-```
+-----------------------------------------------------------
 
 ## 5. Logging and Debugging
 
