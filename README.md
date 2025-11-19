@@ -1897,6 +1897,7 @@ seed: 42
 
 When running multirun, Hydra creates a different directory structure than single runs:
 
+
 ```
 multirun/
 └── YYYY-MM-DD/
