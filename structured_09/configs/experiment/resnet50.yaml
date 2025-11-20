@@ -1,0 +1,8 @@
+defaults:
+  - resnet50_schema
+
+model: resnet50
+nrof_epochs: 30
+lr: 0.001
+batch_size: 64
+lr_scheduler: cosine

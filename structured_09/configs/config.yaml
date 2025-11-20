@@ -1,0 +1,4 @@
+defaults:
+- config_schema
+- experiment: resnet18
+- _self_
