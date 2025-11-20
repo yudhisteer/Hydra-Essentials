@@ -1,8 +1,0 @@
-server:
-  host: localhost
-  port: 8080
-
-client:
-  url: ${server.host}:${server.port}
-  timeout: 10
-  description: Client of ${.url}
